@@ -1,0 +1,202 @@
+
+{% load static %}
+<!DOCTYPE html>
+<html lang="it">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+
+    <title>{% block title %}RVKeeper{% endblock %}</title>
+
+    <style>
+        * {
+            box-sizing: border-box;
+        }
+
+        body {
+            margin: 0;
+            min-height: 100vh;
+            font-family: Arial, Helvetica, sans-serif;
+            color: #263445;
+
+            background:
+                linear-gradient(
+                    135deg,
+                    rgba(12, 28, 45, 0.30),
+                    rgba(12, 28, 45, 0.30)
+                ),
+                url("{% static 'images/rv-background.webp' %}");
+
+            background-size: cover;
+            background-position: center;
+            background-repeat: no-repeat;
+            background-attachment: fixed;
+        }
+
+        header {
+            min-height: 70px;
+            padding: 15px 35px;
+            background: rgba(18, 38, 61, 0.94);
+            color: white;
+
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+        }
+
+        header h1 {
+            margin: 0;
+            font-size: 25px;
+            letter-spacing: 1px;
+        }
+
+        header a {
+            color: white;
+            text-decoration: none;
+        }
+
+        nav {
+            padding: 14px 35px;
+            background: rgba(35, 58, 83, 0.92);
+        }
+
+        nav a {
+            color: white;
+            text-decoration: none;
+            margin-right: 28px;
+            font-size: 14px;
+        }
+
+        nav a:hover {
+            color: #8fc8ff;
+        }
+
+        main {
+            width: 100%;
+            max-width: 1250px;
+            margin: 35px auto;
+            padding: 0 25px;
+        }
+
+        .panel {
+            background: rgba(255, 255, 255, 0.96);
+            padding: 30px;
+            border-radius: 10px;
+            box-shadow: 0 5px 25px rgba(0,0,0,0.20);
+        }
+
+        .login-panel {
+            width: 100%;
+            max-width: 430px;
+            margin: 75px auto;
+        }
+
+        .form-field {
+            margin-bottom: 20px;
+        }
+
+        .form-field label {
+            display: block;
+            font-weight: 600;
+            margin-bottom: 8px;
+        }
+
+        .form-field input,
+        .form-field select,
+        .form-field textarea {
+            display: block;
+            width: 100%;
+            padding: 12px;
+            border: 1px solid #cbd3dc;
+            border-radius: 5px;
+            font-size: 15px;
+            background: white;
+        }
+
+        .form-field input:focus {
+            outline: none;
+            border-color: #2463a6;
+            box-shadow: 0 0 0 2px rgba(36,99,166,0.12);
+        }
+
+        button {
+            background: #2463a6;
+            color: white;
+            border: 0;
+            padding: 12px 22px;
+            border-radius: 5px;
+            cursor: pointer;
+            font-size: 14px;
+        }
+
+        button:hover {
+            background: #174a80;
+        }
+
+        footer {
+            text-align: center;
+            padding: 20px;
+            color: white;
+            text-shadow: 0 1px 3px #000;
+        }
+
+        @media (max-width: 650px) {
+            header {
+                padding: 15px;
+            }
+
+            nav {
+                padding: 12px 15px;
+            }
+
+            nav a {
+                display: inline-block;
+                margin: 5px 12px 5px 0;
+            }
+
+            .login-panel {
+                margin: 35px auto;
+            }
+        }
+    </style>
+
+    {% block extra_css %}{% endblock %}
+</head>
+
+<body>
+
+<header>
+    <h1><a href="/">RVKeeper</a></h1>
+
+    {% if user.is_authenticated %}
+        <div>
+            {{ user.email }}
+
+            <form method="post" action="{% url 'logout' %}"
+                  style="display:inline">
+                {% csrf_token %}
+                <button type="submit">Esci</button>
+            </form>
+        </div>
+    {% endif %}
+</header>
+
+{% if user.is_authenticated %}
+<nav>
+    <a href="/">Dashboard</a>
+    <a href="#">Parco mezzi</a>
+    <a href="#">Manutenzioni</a>
+    <a href="#">Magazzino</a>
+</nav>
+{% endif %}
+
+<main>
+    {% block content %}{% endblock %}
+</main>
+
+<footer>
+    RVKeeper - Camper Maintenance Management
+</footer>
+
+</body>
+</html>
