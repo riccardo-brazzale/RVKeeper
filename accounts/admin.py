@@ -45,6 +45,8 @@ class CustomUserAdmin(UserAdmin):
                 "first_name",
                 "last_name",
                 "preferred_language",
+                "department",
+                "specialty",
             )
         }),
         ("Permessi", {

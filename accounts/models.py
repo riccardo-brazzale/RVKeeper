@@ -44,7 +44,12 @@ class User(AbstractUser):
     LANGUAGE_CHOICES = [
         ("en-us", "English"),
         ("it", "Italiano"),
+        ("fr", "Français"),
+        ("de", "Deutsch"),
+        ("es", "Español"),
     ]
+    DEPARTMENT_CHOICES = [(v, v.title()) for v in ("reception", "technician", "details", "parts", "warranty", "admin")]
+    SPECIALTY_CHOICES = [(v, v.title()) for v in ("interior", "engine", "body", "general", "detailing")]
 
     email = models.EmailField(
         unique=True,
@@ -57,6 +62,9 @@ class User(AbstractUser):
         default="en-us",
         verbose_name="Lingua preferita"
     )
+
+    department = models.CharField(max_length=20, choices=DEPARTMENT_CHOICES, default="reception", verbose_name="Reparto")
+    specialty = models.CharField(max_length=20, choices=SPECIALTY_CHOICES, blank=True, verbose_name="Specialità")
 
     USERNAME_FIELD = "email"
     REQUIRED_FIELDS = []

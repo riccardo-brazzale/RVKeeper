@@ -1,0 +1,13 @@
+{% extends "base.html" %}
+{% block title %}Parco mezzi - RVKeeper{% endblock %}
+{% block content %}
+<h2>Parco mezzi</h2>
+<div class="panel">
+    <p>Camper registrati nell'officina.</p>
+    {% if has_workshop %}<p><a class="button-link" href="{% url 'fleet:camper_create' %}">Aggiungi camper</a></p>
+        {% if campers %}<div class="table-wrap"><table><thead><tr><th>Numero interno</th><th>Targa</th><th>Veicolo</th><th>Proprietario</th><th>Chilometraggio</th></tr></thead><tbody>
+        {% for camper in campers %}<tr><td>{{ camper.internal_number }}</td><td>{{ camper.plate|default:"—" }}</td><td>{{ camper.brand }} {{ camper.model }}</td><td>{{ camper.owner|default:"—" }}</td><td>{{ camper.mileage|default:"—" }}</td></tr>{% endfor %}
+        </tbody></table></div>{% else %}<p>Nessun camper registrato. Usa “Aggiungi camper” per inserire il primo.</p>{% endif %}
+    {% else %}<p>Il tuo account non è ancora associato a un'officina attiva. Contatta l'amministratore.</p>{% endif %}
+</div>
+{% endblock %}

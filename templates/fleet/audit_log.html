@@ -1,0 +1,4 @@
+{% extends "base.html" %}
+{% block title %}Registro attività - RVKeeper{% endblock %}
+{% block content %}<h2>Registro attività</h2><div class="panel"><div class="table-wrap">
+{% if items %}<table><thead><tr><th>Data</th><th>Utente</th><th>Azione</th><th>Elemento</th><th>Dettagli</th></tr></thead><tbody>{% for item in items %}<tr><td>{{ item.created_at|date:"d/m/Y H:i" }}</td><td>{{ item.actor|default:"Sistema" }}</td><td>{{ item.action }}</td><td>{{ item.entity_type }} · {{ item.entity_id }}</td><td>{{ item.details }}</td></tr>{% endfor %}</tbody></table>{% else %}<p>Nessuna attività registrata.</p>{% endif %}</div></div>{% endblock %}

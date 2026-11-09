@@ -1,0 +1,13 @@
+{% extends "base.html" %}
+{% block title %}Nuovo elemento · {{ title }} - RVKeeper{% endblock %}
+{% block content %}
+<h2>Nuovo elemento · {{ title }}</h2>
+<div class="panel"><form method="post" enctype="multipart/form-data">{% csrf_token %}
+    {% if form.non_field_errors %}<div class="form-errors">{{ form.non_field_errors }}</div>{% endif %}
+    <div class="form-grid">{% for field in form %}<div class="form-field {% if field.field.widget.input_type == 'checkbox' %}checkbox-field{% endif %}">
+        <label for="{{ field.id_for_label }}">{{ field.label }}</label>{{ field }}
+        {% if field.help_text %}<small>{{ field.help_text }}</small>{% endif %}{% for error in field.errors %}<div class="form-errors">{{ error }}</div>{% endfor %}
+    </div>{% endfor %}</div>
+    <button type="submit">Salva</button> <a href="{% url 'fleet:workflow_list' module=module %}">Annulla</a>
+</form></div>
+{% endblock %}

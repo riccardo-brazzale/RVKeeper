@@ -12,14 +12,14 @@
 <div class="panel">
 
     <h3>Gestione officina</h3>
-
-    <p>Seleziona una delle funzioni disponibili.</p>
-
+    <p>Seleziona una funzione dal menu laterale.</p>
     <ul>
-        <li>Parco mezzi</li>
-        <li>Manutenzioni</li>
-        <li>Magazzino e ricambi</li>
-        <li>Gestione clienti</li>
+        <li><a href="{% url 'fleet:camper_list' %}">Parco mezzi</a></li>
+        <li><a href="{% url 'orders' %}">Ordini di lavoro</a></li>
+        <li><a href="{% url 'jobs' %}">Lavori e tecnici</a></li>
+        <li><a href="{% url 'inventory' %}">Magazzino ricambi</a></li>
+        <li><a href="{% url 'parts_requests' %}">Richieste ricambi</a></li>
+        <li><a href="{% url 'warranties' %}">Garanzie</a></li>
     </ul>
 
 </div>

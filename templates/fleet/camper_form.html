@@ -1,0 +1,20 @@
+{% extends "base.html" %}
+{% block title %}Aggiungi camper - RVKeeper{% endblock %}
+{% block content %}
+<h2>Aggiungi camper</h2>
+<div class="panel">
+    <form method="post">{% csrf_token %}
+        {% if form.non_field_errors %}<div class="form-errors">{{ form.non_field_errors }}</div>{% endif %}
+        <div class="form-grid">
+        {% for field in form %}<div class="form-field {% if field.name == 'notes' %}full-width{% endif %}">
+            <label for="{{ field.id_for_label }}">{{ field.label }}</label>
+            {{ field }}
+            {% if field.help_text %}<small>{{ field.help_text }}</small>{% endif %}
+            {% for error in field.errors %}<div class="form-errors">{{ error }}</div>{% endfor %}
+        </div>{% endfor %}
+        </div>
+        <button type="submit">Salva camper</button>
+        <a href="{% url 'fleet:camper_list' %}">Annulla</a>
+    </form>
+</div>
+{% endblock %}

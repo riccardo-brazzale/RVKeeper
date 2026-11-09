@@ -1,0 +1,17 @@
+{% extends "base.html" %}
+{% block title %}{{ title }} - RVKeeper{% endblock %}
+{% block content %}
+<div class="page-heading"><div><h2>{{ title }}</h2><p>Gestione dati dell'officina attiva.</p></div><a class="button-link" href="{% url 'fleet:workflow_create' module=module %}">Nuovo</a></div>
+<div class="panel"><div class="table-wrap">
+{% if display_rows %}<table><thead><tr>{% for column in columns %}<th>{{ column|cut:"_"|title }}</th>{% endfor %}<th>Azioni</th></tr></thead><tbody>
+{% for obj, values in display_rows %}<tr>{% for value in values %}<td>{{ value|default:"—" }}</td>{% endfor %}
+{% if module == "jobs" %}<td><div class="actions">
+{% if obj.status == "in_progress" %}<form method="post" action="{% url 'job_action' pk=obj.pk action='pause' %}">{% csrf_token %}<button>Pausa</button></form><form method="post" action="{% url 'job_action' pk=obj.pk action='complete' %}">{% csrf_token %}<button>Completa</button></form>
+{% elif obj.status != "completed" and obj.status != "cancelled" %}<form method="post" action="{% url 'job_action' pk=obj.pk action='start' %}">{% csrf_token %}<button>Avvia</button></form>{% endif %}
+{% if obj.status != "completed" and obj.status != "cancelled" %}<form method="post" action="{% url 'job_action' pk=obj.pk action='waiting_parts' %}">{% csrf_token %}<input name="reason" aria-label="Motivo attesa ricambi" placeholder="Motivo attesa"><button>Attesa ricambi</button></form><form method="post" action="{% url 'job_action' pk=obj.pk action='waiting_warranty' %}">{% csrf_token %}<input name="reason" aria-label="Motivo attesa garanzia" placeholder="Motivo garanzia"><button>Attesa garanzia</button></form>{% endif %}
+<a href="{% url 'fleet:workflow_edit' module=module pk=obj.pk %}">Modifica</a>
+</div></td>{% elif module == "requests" %}<td>{% if obj.status != "delivered" %}<form method="post" action="{% url 'parts_request_action' pk=obj.pk action='deliver' %}">{% csrf_token %}<button>Registra consegna</button></form>{% endif %}<a href="{% url 'fleet:workflow_edit' module=module pk=obj.pk %}">Modifica</a></td>
+{% elif module == "orders" or module == "claims" or module == "returns" %}<td><form method="post" action="{% url 'workflow_status_action' module=module pk=obj.pk %}">{% csrf_token %}<select name="status" aria-label="Nuovo stato">{% for value, label in status_choices %}<option value="{{ value }}" {% if value == obj.status %}selected{% endif %}>{{ label }}</option>{% endfor %}</select>{% if module == "claims" or module == "returns" %}<input name="decision_notes" placeholder="Nota decisione">{% endif %}<button>Aggiorna</button></form><a href="{% url 'fleet:workflow_edit' module=module pk=obj.pk %}">Modifica</a></td>{% else %}<td><a href="{% url 'fleet:workflow_edit' module=module pk=obj.pk %}">Modifica</a></td>{% endif %}</tr>{% endfor %}
+</tbody></table>{% else %}<p>Nessun elemento registrato. Usa “Nuovo” per aggiungere il primo.</p>{% endif %}
+</div></div>
+{% endblock %}

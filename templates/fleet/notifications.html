@@ -1,0 +1,6 @@
+{% extends "base.html" %}
+{% block title %}Notifiche - RVKeeper{% endblock %}
+{% block content %}<h2>Notifiche</h2><div class="panel">
+{% if items %}<ul class="notification-list">{% for item in items %}<li><strong>{{ item.title }}</strong> · {{ item.created_at|date:"d/m/Y H:i" }}{% if not item.read %} <span class="badge">Nuova</span>{% endif %}<p>{{ item.body }}</p></li>{% endfor %}</ul>
+<form method="post" action="{% url 'notifications_read' %}">{% csrf_token %}<button>Segna tutte come lette</button></form>
+{% else %}<p>Nessuna notifica.</p>{% endif %}</div>{% endblock %}
