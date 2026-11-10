@@ -1,9 +1,20 @@
 
 from django.contrib import admin
 from django.contrib.auth.admin import UserAdmin
+from django.contrib.auth.models import Group
 
 from .models import User
 from .forms import CustomUserCreationForm, CustomUserChangeForm
+from workshops.models import Membership
+
+
+admin.site.unregister(Group)
+
+
+class MembershipInline(admin.TabularInline):
+    model = Membership
+    extra = 0
+    fields = ("workshop", "role", "is_active")
 
 
 @admin.register(User)
@@ -13,9 +24,11 @@ class CustomUserAdmin(UserAdmin):
 
     form = CustomUserChangeForm
     add_form = CustomUserCreationForm
+    inlines = (MembershipInline,)
 
-    ordering = ("email",)
+    ordering = ("username",)
     list_display = (
+        "username",
         "email",
         "first_name",
         "last_name",
@@ -31,6 +44,7 @@ class CustomUserAdmin(UserAdmin):
     )
 
     search_fields = (
+        "username",
         "email",
         "first_name",
         "last_name",
@@ -38,7 +52,7 @@ class CustomUserAdmin(UserAdmin):
 
     fieldsets = (
         (None, {
-            "fields": ("email", "password")
+            "fields": ("username", "email", "password")
         }),
         ("Informazioni personali", {
             "fields": (
@@ -54,8 +68,6 @@ class CustomUserAdmin(UserAdmin):
                 "is_active",
                 "is_staff",
                 "is_superuser",
-                "groups",
-                "user_permissions",
             )
         }),
         ("Date importanti", {
@@ -70,6 +82,7 @@ class CustomUserAdmin(UserAdmin):
         (None, {
             "classes": ("wide",),
             "fields": (
+                "username",
                 "email",
                 "password1",
                 "password2",
@@ -80,7 +93,3 @@ class CustomUserAdmin(UserAdmin):
         }),
     )
 
-    filter_horizontal = (
-        "groups",
-        "user_permissions",
-    )

@@ -4,11 +4,18 @@ from django.urls import include, path
 from django.contrib.auth import views as auth_views
 from django.conf import settings
 from django.conf.urls.static import static
+from django.urls import reverse_lazy
 
 from fleet import views as fleet_views
+from config import admin_ordering  # noqa: F401
+
+admin.site.site_header = "Amministrazione RVKeeper"
+admin.site.site_title = "Amministrazione RVKeeper"
+admin.site.index_title = "Amministrazione RVKeeper"
 
 
 urlpatterns = [
+    path("i18n/", include("django.conf.urls.i18n")),
     path("", fleet_views.dashboard, name="home"),
 
     path(
@@ -24,6 +31,37 @@ urlpatterns = [
         "accounts/logout/",
         auth_views.LogoutView.as_view(),
         name="logout"
+    ),
+    path(
+        "accounts/password_reset/",
+        auth_views.PasswordResetView.as_view(
+            template_name="registration/password_reset_form.html",
+            email_template_name="registration/password_reset_email.txt",
+            subject_template_name="registration/password_reset_subject.txt",
+        ),
+        name="password_reset",
+    ),
+    path(
+        "accounts/password_reset/done/",
+        auth_views.PasswordResetDoneView.as_view(
+            template_name="registration/password_reset_done.html",
+        ),
+        name="password_reset_done",
+    ),
+    path(
+        "accounts/reset/<uidb64>/<token>/",
+        auth_views.PasswordResetConfirmView.as_view(
+            template_name="registration/password_reset_confirm.html",
+            success_url=reverse_lazy("password_reset_complete"),
+        ),
+        name="password_reset_confirm",
+    ),
+    path(
+        "accounts/reset/done/",
+        auth_views.PasswordResetCompleteView.as_view(
+            template_name="registration/password_reset_complete.html",
+        ),
+        name="password_reset_complete",
     ),
 
     path("parco-mezzi/", include("fleet.urls")),

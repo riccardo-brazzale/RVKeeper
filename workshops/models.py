@@ -95,22 +95,25 @@ class Membership(models.Model):
     user = models.ForeignKey(
         settings.AUTH_USER_MODEL,
         on_delete=models.CASCADE,
-        related_name="memberships"
+        related_name="memberships",
+        verbose_name="Utente",
     )
 
     workshop = models.ForeignKey(
         Workshop,
         on_delete=models.CASCADE,
-        related_name="memberships"
+        related_name="memberships",
+        verbose_name="Officina",
     )
 
     role = models.ForeignKey(
         Role,
         on_delete=models.PROTECT,
-        related_name="memberships"
+        related_name="memberships",
+        verbose_name="Ruolo",
     )
 
-    is_active = models.BooleanField(default=True)
+    is_active = models.BooleanField(default=True, verbose_name="Attiva")
 
     created_at = models.DateTimeField(auto_now_add=True)
 
@@ -122,7 +125,11 @@ class Membership(models.Model):
         constraints = [
             models.UniqueConstraint(
                 fields=["user", "workshop"],
-                name="unique_user_per_workshop"
+                name="unique_user_per_workshop",
+                violation_error_message=(
+                    "Questo utente ha già un'appartenenza per questa officina. "
+                    "Modifica quella esistente per cambiare ruolo."
+                ),
             )
         ]
 

@@ -17,7 +17,7 @@
 
     {% if form.errors %}
         <p style="color:#c0392b">
-            Email o password non corrette.
+            Nome utente o password non corretti.
         </p>
     {% endif %}
 
@@ -26,7 +26,7 @@
 
         <div class="form-field">
             <label for="{{ form.username.id_for_label }}">
-                Email
+                Nome utente
             </label>
             {{ form.username }}
         </div>
@@ -44,6 +44,10 @@
             ACCEDI
         </button>
     </form>
+
+    <p style="text-align:center; margin-bottom:0">
+        <a href="{% url 'password_reset' %}">Hai dimenticato la password?</a>
+    </p>
 
 </div>
 

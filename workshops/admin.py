@@ -30,11 +30,6 @@ class RoleAdmin(admin.ModelAdmin):
 
 @admin.register(Membership)
 class MembershipAdmin(admin.ModelAdmin):
-    list_display = (
-        "user",
-        "workshop",
-        "role",
-        "is_active",
-    )
+    list_display = ("user", "workshop", "role", "is_active")
     list_filter = ("workshop", "role", "is_active")
     search_fields = ("user__email", "workshop__name")

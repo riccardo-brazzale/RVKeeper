@@ -1,0 +1,31 @@
+#branding {
+  align-items: center;
+}
+
+#branding .theme-toggle,
+#branding .language-selector {
+  align-self: center;
+}
+
+#user-tools .language-selector {
+  display: inline-flex;
+  margin: 0 0 0 0.5rem;
+  vertical-align: middle;
+}
+
+#user-tools .language-selector select {
+  appearance: auto;
+  background: var(--body-bg);
+  border: 1px solid var(--border-color);
+  border-radius: 4px;
+  color: var(--body-fg);
+  cursor: pointer;
+  font: inherit;
+  line-height: 1.5;
+  padding: 0.25rem 0.4rem;
+}
+
+#branding .language-selector {
+  display: inline-flex;
+  margin: 0 0 0 0.5rem;
+}
