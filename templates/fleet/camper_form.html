@@ -1,7 +1,7 @@
 {% extends "base.html" %}
-{% block title %}Aggiungi camper - RVKeeper{% endblock %}
+{% block title %}{% if camper %}Modifica veicolo{% else %}Aggiungi veicolo{% endif %} - RVKeeper{% endblock %}
 {% block content %}
-<h2>Aggiungi camper</h2>
+<h2>{% if camper %}Modifica veicolo{% else %}Aggiungi veicolo{% endif %}</h2>
 <div class="panel">
     <form method="post">{% csrf_token %}
         {% if form.non_field_errors %}<div class="form-errors">{{ form.non_field_errors }}</div>{% endif %}
@@ -13,8 +13,8 @@
             {% for error in field.errors %}<div class="form-errors">{{ error }}</div>{% endfor %}
         </div>{% endfor %}
         </div>
-        <button type="submit">Salva camper</button>
-        <a href="{% url 'fleet:camper_list' %}">Annulla</a>
+        <button type="submit">Salva veicolo</button>
+        <a href="{% if camper %}{% url 'fleet:camper_detail' pk=camper.pk %}{% else %}{% url 'fleet:camper_list' %}{% endif %}">Annulla</a>
     </form>
 </div>
 {% endblock %}

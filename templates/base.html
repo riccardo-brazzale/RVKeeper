@@ -110,16 +110,19 @@
 <div class="{% if user.is_authenticated %}app-layout{% endif %}">
     {% if user.is_authenticated %}
     <aside class="sidebar" id="primary-navigation">
-        <p class="sidebar-label">Navigazione</p>
         <nav aria-label="Navigazione principale">
-            <a href="{% url 'home' %}" {% if request.resolver_match.url_name == 'home' %}aria-current="page"{% endif %}>Dashboard</a>
-            <a href="{% url 'fleet:camper_list' %}" {% if request.resolver_match.namespace == 'fleet' %}aria-current="page"{% endif %}>Parco mezzi</a>
-            <a href="{% url 'orders' %}" {% if request.resolver_match.url_name == 'orders' or request.resolver_match.url_name == 'order_create' %}aria-current="page"{% endif %}>Ordini di lavoro</a>
-            <a href="{% url 'jobs' %}" {% if request.resolver_match.url_name == 'jobs' or request.resolver_match.url_name == 'job_create' %}aria-current="page"{% endif %}>Lavori e tecnici</a>
-            <a href="{% url 'inventory' %}" {% if request.resolver_match.url_name == 'inventory' or request.resolver_match.url_name == 'part_create' %}aria-current="page"{% endif %}>Magazzino ricambi</a>
+            {% if user.department != 'technician' %}<p class="sidebar-label">Controllo</p><a href="{% url 'home' %}" {% if request.resolver_match.url_name == 'home' %}aria-current="page"{% endif %}>Dashboard</a>
+            <p class="sidebar-label">Anagrafiche</p><a href="{% url 'customers' %}" {% if request.resolver_match.url_name == 'customers' or request.resolver_match.url_name == 'customer_create' %}aria-current="page"{% endif %}>Clienti e fornitori</a><a href="{% url 'fleet:camper_list' %}" {% if request.resolver_match.namespace == 'fleet' %}aria-current="page"{% endif %}>Parco mezzi</a>{% endif %}
+            <p class="sidebar-label">Officina</p><a href="{% url 'orders' %}" {% if request.resolver_match.url_name == 'orders' or request.resolver_match.url_name == 'order_create' %}aria-current="page"{% endif %}>Ordini di lavoro</a>
+            {% if user.department != 'technician' %}<a href="{% url 'quotes' %}" {% if request.resolver_match.url_name == 'quotes' or request.resolver_match.url_name == 'quote_create' or request.resolver_match.url_name == 'quote_detail' or request.resolver_match.url_name == 'quote_edit' %}aria-current="page"{% endif %}>Preventivi</a>{% endif %}
+            <p class="sidebar-label">Avanzamenti</p><a href="{% url 'jobs' %}" {% if request.resolver_match.url_name == 'jobs' or request.resolver_match.url_name == 'job_create' %}aria-current="page"{% endif %}>Lavori e tecnici</a>
+            <p class="sidebar-label">Ricambi</p><a href="{% url 'inventory' %}" {% if request.resolver_match.url_name == 'inventory' or request.resolver_match.url_name == 'part_create' %}aria-current="page"{% endif %}>Magazzino e listino</a>
             <a href="{% url 'parts_requests' %}" {% if request.resolver_match.url_name == 'parts_requests' or request.resolver_match.url_name == 'parts_request_create' %}aria-current="page"{% endif %}>Richieste ricambi</a>
+            {% if user.department != 'technician' %}
+            <p class="sidebar-label">Garanzie</p>
             <a href="{% url 'warranties' %}" {% if request.resolver_match.url_name == 'warranties' or request.resolver_match.url_name == 'warranty_create' %}aria-current="page"{% endif %}>Garanzie</a>
             <a href="{% url 'returns' %}" {% if request.resolver_match.url_name == 'returns' or request.resolver_match.url_name == 'return_create' %}aria-current="page"{% endif %}>Resi in garanzia</a>
+            <p class="sidebar-label">Archivio e report</p>
             <a href="{% url 'notes' %}" {% if request.resolver_match.url_name == 'notes' or request.resolver_match.url_name == 'note_create' %}aria-current="page"{% endif %}>Note interventi</a>
             <a href="{% url 'assignments' %}" {% if request.resolver_match.url_name == 'assignments' or request.resolver_match.url_name == 'assignment_create' %}aria-current="page"{% endif %}>Assegnazioni tecnici</a>
             <a href="{% url 'attachments' %}" {% if request.resolver_match.url_name == 'attachments' or request.resolver_match.url_name == 'attachment_create' %}aria-current="page"{% endif %}>Allegati</a>
@@ -127,6 +130,7 @@
             <a href="{% url 'notifications' %}" {% if request.resolver_match.url_name == 'notifications' %}aria-current="page"{% endif %}>Notifiche</a>
             <a href="{% url 'audit_log' %}" {% if request.resolver_match.url_name == 'audit_log' %}aria-current="page"{% endif %}>Registro attività</a>
             <a href="{% url 'data_export' %}">Esporta backup</a>
+            {% endif %}
         </nav>
     </aside>
     <button class="menu-backdrop" type="button" aria-label="Chiudi menu"></button>

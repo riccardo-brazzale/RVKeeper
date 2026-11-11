@@ -2,105 +2,10 @@
 from django.db import models
 from django.db.models import Q
 from django.core.exceptions import ValidationError
-from django.conf import settings
-
-
-class CamperOwner(models.Model):
-    """Anagrafica dei proprietari dei camper."""
-
-    workshop = models.ForeignKey(
-        "workshops.Workshop",
-        on_delete=models.CASCADE,
-        related_name="camper_owners"
-    )
-
-    is_company = models.BooleanField(
-        default=False,
-        verbose_name="Azienda"
-    )
-
-    first_name = models.CharField(
-        max_length=100,
-        blank=True,
-        verbose_name="Nome"
-    )
-
-    last_name = models.CharField(
-        max_length=100,
-        blank=True,
-        verbose_name="Cognome"
-    )
-
-    company_name = models.CharField(
-        max_length=200,
-        blank=True,
-        verbose_name="Ragione sociale"
-    )
-
-    tax_code = models.CharField(
-        max_length=30,
-        blank=True,
-        verbose_name="Codice fiscale"
-    )
-
-    vat_number = models.CharField(
-        max_length=30,
-        blank=True,
-        verbose_name="Partita IVA"
-    )
-
-    phone = models.CharField(
-        max_length=50,
-        blank=True,
-        verbose_name="Telefono"
-    )
-
-    email = models.EmailField(
-        blank=True,
-        verbose_name="Email"
-    )
-
-    address = models.CharField(
-        max_length=200,
-        blank=True,
-        verbose_name="Indirizzo"
-    )
-
-    postal_code = models.CharField(
-        max_length=15,
-        blank=True,
-        verbose_name="CAP"
-    )
-
-    city = models.CharField(
-        max_length=100,
-        blank=True,
-        verbose_name="Città"
-    )
-
-    country = models.CharField(
-        max_length=2,
-        default="IT",
-        verbose_name="Paese"
-    )
-
-    notes = models.TextField(
-        blank=True,
-        verbose_name="Note"
-    )
-
-    created_at = models.DateTimeField(auto_now_add=True)
-
-    class Meta:
-        ordering = ["last_name", "first_name", "company_name"]
-        verbose_name = "Proprietario"
-        verbose_name_plural = "Proprietari"
-
-    def __str__(self):
-        if self.is_company:
-            return self.company_name
-
-        return f"{self.first_name} {self.last_name}".strip()
+from clientandsuppliers.models import CamperOwner
+from parts.models import Part, PartDocument, PartMovement, PartSupplierOffer
+from orders.models import Job, WorkOrder
+from quotes.models import Quote, QuoteLine
 
 
 class Camper(models.Model):
@@ -329,6 +234,8 @@ class Camper(models.Model):
                 raise ValidationError({
                     "owner": "Il proprietario deve appartenere alla stessa officina."
                 })
+            if not self.owner.is_customer:
+                raise ValidationError({"owner": "Il proprietario del veicolo deve essere registrato come cliente."})
 
     def save(self, *args, **kwargs):
         self.full_clean()
@@ -369,112 +276,13 @@ class CamperPhoto(models.Model):
         return f"{self.camper.internal_number} - {self.caption}"
 
 
-class WorkOrder(models.Model):
-    STATUS_CHOICES = [(v, v.replace("_", " ").title()) for v in (
-        "open", "in_progress", "ready_inspection", "ready_pickup",
-        "additional_work", "completed", "cancelled",
-    )]
-    CLASS_CHOICES = [("customer_pay", "A pagamento"), ("stock", "Stock")]
-    WARRANTY_CHOICES = [(v, v.replace("_", " ").title()) for v in (
-        "not_applicable", "pending", "approved", "partially_approved", "declined",
-    )]
-
-    workshop = models.ForeignKey("workshops.Workshop", on_delete=models.CASCADE, related_name="work_orders")
-    vehicle = models.ForeignKey(Camper, on_delete=models.SET_NULL, null=True, blank=True, related_name="work_orders")
-    ro_number = models.CharField(max_length=40)
-    year = models.CharField(max_length=100, blank=True, help_text="Anno o nota relativa al veicolo")
-    make = models.CharField(max_length=100, blank=True)
-    model = models.CharField(max_length=150, blank=True)
-    customer_name = models.CharField(max_length=200, blank=True)
-    customer_phone = models.CharField(max_length=50, blank=True)
-    customer_email = models.EmailField(blank=True)
-    odometer = models.PositiveIntegerField(null=True, blank=True)
-    work_classification = models.CharField(max_length=20, choices=CLASS_CHOICES, default="customer_pay")
-    warranty_status = models.CharField(max_length=30, choices=WARRANTY_CHOICES, default="not_applicable")
-    status = models.CharField(max_length=30, choices=STATUS_CHOICES, default="open")
-    reception_notes = models.TextField(blank=True)
-    checklist = models.JSONField(default=list, blank=True)
-    damages = models.JSONField(default=list, blank=True)
-    created_by = models.ForeignKey("accounts.User", on_delete=models.SET_NULL, null=True, blank=True, related_name="created_work_orders")
-    created_at = models.DateTimeField(auto_now_add=True)
-    updated_at = models.DateTimeField(auto_now=True)
-
-    class Meta:
-        ordering = ("-created_at",)
-        constraints = [models.UniqueConstraint(fields=("workshop", "ro_number"), name="unique_ro_per_workshop")]
-
-    def __str__(self):
-        return f"RO {self.ro_number} · {self.customer_name}"
-
-
-class Job(models.Model):
-    STATUS_CHOICES = [(v, v.replace("_", " ").title()) for v in (
-        "not_started", "in_progress", "paused", "waiting_parts", "waiting_warranty", "completed", "cancelled",
-    )]
-    CATEGORY_CHOICES = [(v, v.replace("_", " ").title()) for v in ("customer_pay", "warranty", "stock")]
-    DEPARTMENT_CHOICES = [(v, v.title()) for v in ("technician", "details")]
-    SPECIALTY_CHOICES = [(v, v.title()) for v in ("interior", "engine", "body", "general", "detailing")]
-
-    workshop = models.ForeignKey("workshops.Workshop", on_delete=models.CASCADE, related_name="jobs")
-    work_order = models.ForeignKey(WorkOrder, on_delete=models.CASCADE, related_name="jobs")
-    job_number = models.PositiveIntegerField(default=1)
-    title = models.CharField(max_length=200)
-    description = models.TextField(blank=True)
-    category = models.CharField(max_length=20, choices=CATEGORY_CHOICES, default="customer_pay")
-    department = models.CharField(max_length=20, choices=DEPARTMENT_CHOICES, default="technician")
-    specialty = models.CharField(max_length=20, choices=SPECIALTY_CHOICES, default="general")
-    assigned_to = models.ForeignKey("accounts.User", on_delete=models.SET_NULL, null=True, blank=True, related_name="assigned_jobs")
-    active_technician = models.ForeignKey("accounts.User", on_delete=models.SET_NULL, null=True, blank=True, related_name="active_jobs")
-    status = models.CharField(max_length=25, choices=STATUS_CHOICES, default="not_started")
-    reception_notes = models.TextField(blank=True)
-    standard_minutes = models.PositiveIntegerField(default=0)
-    net_minutes = models.PositiveIntegerField(default=0)
-    waiting_minutes = models.PositiveIntegerField(default=0)
-    active_since = models.DateTimeField(null=True, blank=True)
-    waiting_started_at = models.DateTimeField(null=True, blank=True)
-    block_reason = models.TextField(blank=True)
-    started_at = models.DateTimeField(null=True, blank=True)
-    completed_at = models.DateTimeField(null=True, blank=True)
-    transfer_note = models.TextField(blank=True)
-    warranty_decision = models.CharField(max_length=30, blank=True)
-    warranty_hours = models.DecimalField(max_digits=7, decimal_places=2, null=True, blank=True)
-    warranty_reason = models.TextField(blank=True)
-    parts_ready = models.BooleanField(default=False)
-    created_at = models.DateTimeField(auto_now_add=True)
-    updated_at = models.DateTimeField(auto_now=True)
-
-    class Meta:
-        ordering = ("work_order", "job_number")
-
-    def __str__(self):
-        return f"RO {self.work_order.ro_number} · {self.title}"
-
-
-class Part(models.Model):
-    workshop = models.ForeignKey("workshops.Workshop", on_delete=models.CASCADE, related_name="parts")
-    part_number = models.CharField(max_length=80)
-    name = models.CharField(max_length=200)
-    description = models.TextField(blank=True)
-    quantity = models.DecimalField(max_digits=12, decimal_places=2, default=0)
-    min_stock = models.DecimalField(max_digits=12, decimal_places=2, default=0)
-    location = models.CharField(max_length=100, blank=True)
-    created_at = models.DateTimeField(auto_now_add=True)
-    updated_at = models.DateTimeField(auto_now=True)
-
-    class Meta:
-        ordering = ("name",)
-        constraints = [models.UniqueConstraint(fields=("workshop", "part_number"), name="unique_part_number_per_workshop")]
-
-    def __str__(self):
-        return f"{self.part_number} · {self.name}"
-
-
 class PartsRequest(models.Model):
     STATUS_CHOICES = [(v, v.replace("_", " ").title()) for v in ("new", "pending", "preparing", "ready_for_pickup", "delivered", "cancelled")]
     workshop = models.ForeignKey("workshops.Workshop", on_delete=models.CASCADE, related_name="parts_requests")
     work_order = models.ForeignKey(WorkOrder, on_delete=models.CASCADE, related_name="parts_requests")
     job = models.ForeignKey(Job, on_delete=models.SET_NULL, null=True, blank=True, related_name="parts_requests")
     part = models.ForeignKey(Part, on_delete=models.SET_NULL, null=True, blank=True, related_name="requests")
+    supplier_offer = models.ForeignKey("PartSupplierOffer", on_delete=models.SET_NULL, null=True, blank=True, related_name="parts_requests", verbose_name="Offerta fornitore")
     custom_item = models.CharField(max_length=200, blank=True)
     unit = models.CharField(max_length=30, default="each")
     quantity_requested = models.DecimalField(max_digits=12, decimal_places=2, default=1)
@@ -484,6 +292,7 @@ class PartsRequest(models.Model):
     repair_minutes = models.PositiveIntegerField(default=0)
     notes = models.TextField(blank=True)
     supplier = models.CharField(max_length=200, blank=True)
+    purchase_price = models.DecimalField(max_digits=12, decimal_places=2, null=True, blank=True, verbose_name="Prezzo d'acquisto concordato")
     order_number = models.CharField(max_length=100, blank=True)
     status = models.CharField(max_length=25, choices=STATUS_CHOICES, default="new")
     warranty_claim = models.ForeignKey("WarrantyClaim", on_delete=models.SET_NULL, null=True, blank=True, related_name="parts_requests")
@@ -500,6 +309,13 @@ class PartsRequest(models.Model):
 
     def __str__(self):
         return f"RO {self.work_order.ro_number} · {self.part or self.custom_item}"
+
+    def clean(self):
+        super().clean()
+        if self.supplier_offer_id:
+            offer = self.supplier_offer
+            if offer.part_id != self.part_id or (self.workshop_id and offer.part.workshop_id != self.workshop_id):
+                raise ValidationError({"supplier_offer": "Scegli un’offerta associata a questo ricambio e alla stessa officina."})
 
 
 class WarrantyClaim(models.Model):

@@ -3,10 +3,11 @@
 {% block content %}
 <h2>Parco mezzi</h2>
 <div class="panel">
-    <p>Camper registrati nell'officina.</p>
+    <p>Veicoli registrati nell'officina. Cerca per targa, telaio, cliente o modello.</p>
+    <form method="get" class="actions" style="margin-bottom:16px"><input type="search" name="q" value="{{ search }}" placeholder="Targa, telaio, cliente…" aria-label="Cerca veicolo"><button type="submit">Cerca</button>{% if search %}<a href="{% url 'fleet:camper_list' %}">Azzera</a>{% endif %}</form>
     {% if has_workshop %}<p><a class="button-link" href="{% url 'fleet:camper_create' %}">Aggiungi camper</a></p>
         {% if campers %}<div class="table-wrap"><table><thead><tr><th>Numero interno</th><th>Targa</th><th>Veicolo</th><th>Proprietario</th><th>Chilometraggio</th></tr></thead><tbody>
-        {% for camper in campers %}<tr><td>{{ camper.internal_number }}</td><td>{{ camper.plate|default:"—" }}</td><td>{{ camper.brand }} {{ camper.model }}</td><td>{{ camper.owner|default:"—" }}</td><td>{{ camper.mileage|default:"—" }}</td></tr>{% endfor %}
+        {% for camper in campers %}<tr><td><a href="{% url 'fleet:camper_detail' pk=camper.pk %}">{{ camper.internal_number }}</a></td><td>{{ camper.plate|default:"—" }}</td><td>{{ camper.brand }} {{ camper.model }}</td><td>{{ camper.owner|default:"—" }}</td><td>{{ camper.mileage|default:"—" }}</td></tr>{% endfor %}
         </tbody></table></div>{% else %}<p>Nessun camper registrato. Usa “Aggiungi camper” per inserire il primo.</p>{% endif %}
     {% else %}<p>Il tuo account non è ancora associato a un'officina attiva. Contatta l'amministratore.</p>{% endif %}
 </div>

@@ -5,3 +5,4 @@ psycopg==3.3.8
 python-dotenv==1.2.4
 sqlparse==0.6.1
 typing_extensions==4.16.0
+reportlab>=4.2,<5

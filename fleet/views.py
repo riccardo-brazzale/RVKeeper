@@ -4,16 +4,20 @@ from django.db import models, transaction
 from django.db.models import Count, Sum
 from django.forms import modelform_factory
 from django.core import serializers
-from django.http import Http404, HttpResponse
+from django.http import Http404, HttpResponse, HttpResponseForbidden
 from django.shortcuts import get_object_or_404, redirect, render
 from django.utils import timezone
+from io import BytesIO
+from xml.sax.saxutils import escape
 
 from workshops.models import Membership
 from workshops.models import Role, Workshop
-from .forms import CamperForm
+from .forms import CamperForm, WorkOrderForm
 from .models import (Attachment, AuditLog, Camper, CamperOwner, CamperPhoto, Job,
-                     JobAssignment, JobNote, Notification, Part, PartsRequest,
+                     JobAssignment, JobNote, Notification, Part, PartDocument, PartMovement, PartSupplierOffer, PartsRequest,
                      TimeEvent, WarrantyClaim, WarrantyReturn, WorkOrder)
+from quotes.models import Quote, QuoteLine
+from parts.views import part_detail, part_document_upload, part_movement, part_supplier_offer
 
 
 def _active_workshop(user):
@@ -23,15 +27,33 @@ def _active_workshop(user):
     return membership.workshop if membership else None
 
 
+def _is_mechanic(user):
+    return getattr(user, "department", "") == "technician"
+
+
+def _forbidden_for_mechanic(request):
+    if _is_mechanic(request.user):
+        return HttpResponseForbidden("Il tuo profilo può accedere solo a ordini di lavoro e ricambi.")
+    return None
+
+
 @login_required
 def camper_list(request):
+    if denied := _forbidden_for_mechanic(request): return denied
     workshop = _active_workshop(request.user)
     campers = Camper.objects.filter(workshop=workshop, is_active=True) if workshop else Camper.objects.none()
-    return render(request, "fleet/camper_list.html", {"campers": campers, "has_workshop": workshop is not None})
+    search = request.GET.get("q", "").strip()
+    if search:
+        campers = campers.filter(models.Q(plate__icontains=search) | models.Q(vin__icontains=search) |
+            models.Q(internal_number__icontains=search) | models.Q(brand__icontains=search) |
+            models.Q(model__icontains=search) | models.Q(owner__company_name__icontains=search) |
+            models.Q(owner__first_name__icontains=search) | models.Q(owner__last_name__icontains=search))
+    return render(request, "fleet/camper_list.html", {"campers": campers, "has_workshop": workshop is not None, "search": search})
 
 
 @login_required
 def camper_create(request):
+    if denied := _forbidden_for_mechanic(request): return denied
     workshop = _active_workshop(request.user)
     if workshop is None:
         messages.error(request, "Il tuo account non è associato a un'officina attiva.")
@@ -47,11 +69,34 @@ def camper_create(request):
     return render(request, "fleet/camper_form.html", {"form": form})
 
 
+@login_required
+def camper_edit(request, pk):
+    if denied := _forbidden_for_mechanic(request): return denied
+    workshop = _workshop_or_redirect(request)
+    if workshop is None: return redirect("home")
+    camper = get_object_or_404(Camper, pk=pk, workshop=workshop)
+    form = CamperForm(request.POST or None, instance=camper, workshop=workshop)
+    if request.method == "POST" and form.is_valid():
+        form.save()
+        messages.success(request, "Scheda veicolo aggiornata.")
+        return redirect("fleet:camper_detail", pk=camper.pk)
+    return render(request, "fleet/camper_form.html", {"form": form, "camper": camper})
+
+
+@login_required
+def camper_detail(request, pk):
+    if denied := _forbidden_for_mechanic(request): return denied
+    workshop = _workshop_or_redirect(request)
+    if workshop is None: return redirect("home")
+    camper = get_object_or_404(Camper.objects.select_related("owner"), pk=pk, workshop=workshop)
+    orders = camper.work_orders.order_by("-created_at").prefetch_related("jobs")
+    return render(request, "fleet/camper_detail.html", {"camper": camper, "orders": orders})
+
+
 MODULES = {
-    "orders": (WorkOrder, "Ordini di lavoro", ("ro_number", "customer_name", "status", "created_at")),
+    "orders": (WorkOrder, "Ordini di lavoro", ("ro_number", "customer", "customer_phone", "status", "completed_at", "invoiced")),
     "jobs": (Job, "Lavori e tecnici", ("work_order", "title", "assigned_to", "status")),
-    "parts": (Part, "Magazzino ricambi", ("part_number", "name", "quantity", "min_stock", "location")),
-    "requests": (PartsRequest, "Richieste ricambi", ("work_order", "part", "custom_item", "quantity_requested", "status")),
+    "requests": (PartsRequest, "Richieste ricambi", ("work_order", "part", "supplier_offer", "custom_item", "quantity_requested", "status")),
     "claims": (WarrantyClaim, "Garanzie", ("work_order", "component", "problem_description", "status")),
     "returns": (WarrantyReturn, "Resi in garanzia", ("work_order", "part_name", "quantity", "status")),
     "attachments": (Attachment, "Allegati", ("work_order", "file_name", "caption", "uploaded_by", "created_at")),
@@ -59,10 +104,9 @@ MODULES = {
     "assignments": (JobAssignment, "Assegnazioni tecnici", ("job", "from_technician", "to_technician", "reason", "created_at")),
 }
 FORM_EXCLUDES = {
-    WorkOrder: ("workshop", "created_by", "created_at", "updated_at"),
+    WorkOrder: ("workshop", "status", "created_by", "completed_at", "invoiced", "invoiced_at", "invoiced_by", "created_at", "updated_at"),
     Job: ("workshop", "status", "active_technician", "net_minutes", "waiting_minutes", "started_at", "completed_at", "active_since", "waiting_started_at", "created_at", "updated_at"),
-    Part: ("workshop", "created_at", "updated_at"),
-    PartsRequest: ("workshop", "requested_by", "delivered_at", "delivered_by", "inventory_applied", "created_at", "updated_at"),
+    PartsRequest: ("workshop", "requested_by", "quantity_delivered", "purchase_price", "delivered_at", "delivered_by", "inventory_applied", "created_at", "updated_at"),
     WarrantyClaim: ("workshop", "requested_by", "decided_by", "decided_at", "created_at", "updated_at"),
     WarrantyReturn: ("workshop", "requested_by", "decided_by", "decided_at", "created_at"),
     Attachment: ("workshop", "uploaded_by", "created_at"),
@@ -96,8 +140,25 @@ def _audit(workshop, user, action, model, obj, details=""):
                             details=details or str(obj))
 
 
+def _assign_work_order_customer(form, order):
+    if order.vehicle_id:
+        vehicle_customer = order.vehicle.owner if order.vehicle.owner_id and order.vehicle.owner.is_customer else None
+        if order.customer_id and vehicle_customer and order.customer_id != vehicle_customer.pk:
+            form.add_error("customer", "Il cliente deve coincidere con il proprietario del veicolo.")
+            return False
+        if not order.customer_id and vehicle_customer:
+            order.customer = vehicle_customer
+    if order.customer_id:
+        order.customer_name = str(order.customer)
+        order.customer_phone = order.customer.phone
+        order.customer_email = order.customer.email
+    return True
+
+
 @login_required
 def dashboard(request):
+    if _is_mechanic(request.user):
+        return redirect("jobs")
     workshop = _workshop_or_redirect(request)
     if workshop is None:
         return render(request, "fleet/dashboard.html", {"has_workshop": False})
@@ -118,22 +179,31 @@ def dashboard(request):
 
 @login_required
 def workflow_list(request, module):
+    if module == "owners":
+        return redirect("customers")
+    if module == "parts":
+        return redirect("inventory")
+    if module not in ("orders", "jobs", "parts", "requests") and _forbidden_for_mechanic(request):
+        return _forbidden_for_mechanic(request)
     workshop = _workshop_or_redirect(request)
     if workshop is None:
         return redirect("home")
     model, title, columns = _module(module)
+    if module == "requests" and _is_mechanic(request.user):
+        columns = tuple(column for column in columns if column != "supplier_offer")
+    if module == "orders" and _is_mechanic(request.user):
+        columns = tuple(column for column in columns if column != "invoiced")
     objects = model.objects.filter(workshop=workshop).select_related(*[f for f in columns if f in {x.name for x in model._meta.fields} and model._meta.get_field(f).is_relation])
     if model is PartsRequest:
-        objects = objects.select_related("work_order", "part")
+        objects = objects.select_related("work_order", "part", "supplier_offer__supplier")
     if model is WarrantyClaim or model is WarrantyReturn:
         objects = objects.select_related("work_order")
     if model is Job:
         objects = objects.select_related("work_order", "assigned_to")
+        if _is_mechanic(request.user):
+            objects = objects.filter(models.Q(assigned_to=request.user) | models.Q(active_technician=request.user)).distinct()
     if model is Attachment:
         objects = objects.select_related("work_order", "uploaded_by")
-    if module == "parts":
-        for part in objects.filter(quantity__lte=models.F("min_stock")):
-            Notification.objects.get_or_create(workshop=workshop, user=None, title="Scorta ricambi bassa", link=f"/magazzino/", read=False, defaults={"body": f"{part.part_number} · {part.name}: disponibili {part.quantity}, minimo {part.min_stock}"})
     display_rows = []
     for obj in objects:
         values = []
@@ -142,44 +212,97 @@ def workflow_list(request, module):
                 value = ""
             else:
                 field = model._meta.get_field(name)
-                if field.is_relation:
+                if module == "orders" and name == "customer":
+                    value = str(obj.customer) if obj.customer_id else obj.customer_name
+                elif module == "orders" and name == "customer_phone":
+                    value = obj.customer.phone if obj.customer_id else obj.customer_phone
+                elif field.is_relation:
                     value = str(getattr(obj, name) or "—")
                 elif field.choices:
                     value = getattr(obj, f"get_{name}_display")()
+                elif module == "orders" and name == "invoiced":
+                    value = "Fatturato" if obj.invoiced else "Da fatturare"
+                elif module == "orders" and name == "completed_at":
+                    value = timezone.localtime(obj.completed_at).strftime("%d/%m/%Y %H:%M") if obj.completed_at else "—"
                 else:
                     value = getattr(obj, name)
                 if isinstance(obj, JobNote) and name == "text":
                     value = obj.translations.get(request.user.preferred_language) or value
             values.append(value)
         display_rows.append((obj, values))
-    context = {"module": module, "title": title, "objects": objects, "columns": columns, "display_rows": display_rows, "model": model,
+    headers = {
+        "orders": ("Numero OdL", "Cliente (anagrafica)", "Telefono cliente", "Stato", "Data chiusura", "Fatturazione"),
+        "jobs": ("Ordine", "Intervento", "Tecnico", "Stato"),
+        "requests": ("Ordine", "Ricambio", "Fornitore / prezzo", "Articolo libero", "Quantità richiesta", "Stato"),
+        "claims": ("Ordine", "Componente", "Descrizione problema", "Stato"),
+        "returns": ("Ordine", "Ricambio", "Quantità", "Stato"),
+        "attachments": ("Ordine", "Nome file", "Descrizione", "Caricato da", "Data"),
+        "notes": ("Lavoro", "Autore", "Lingua", "Nota", "Data"),
+        "assignments": ("Lavoro", "Da", "A", "Motivo", "Data"),
+    }
+    column_headers = headers.get(module, columns)
+    if module == "requests" and _is_mechanic(request.user):
+        column_headers = ("Ordine", "Ricambio", "Articolo libero", "Quantità richiesta", "Stato")
+    if module == "orders" and _is_mechanic(request.user):
+        column_headers = ("Numero OdL", "Cliente", "Telefono", "Stato", "Data chiusura")
+    context = {"module": module, "title": title, "objects": objects, "columns": columns, "headers": column_headers, "display_rows": display_rows, "model": model,
                "status_choices": model._meta.get_field("status").choices if any(f.name == "status" for f in model._meta.fields) else ()}
     return render(request, "fleet/workflow_list.html", context)
 
 
 @login_required
 def workflow_create(request, module):
+    if _is_mechanic(request.user) and module in ("orders", "jobs", "parts"):
+        return HttpResponseForbidden("Puoi registrare movimenti di magazzino; il catalogo ricambi è gestito dal responsabile.")
+    if module not in ("orders", "jobs", "parts", "requests") and _forbidden_for_mechanic(request):
+        return _forbidden_for_mechanic(request)
+    if module == "owners":
+        return redirect("customer_create")
+    if module == "parts":
+        return redirect("part_create")
     workshop = _workshop_or_redirect(request)
     if workshop is None:
         return redirect("home")
     model, title, _ = _module(module)
     exclude = FORM_EXCLUDES[model]
-    Form = modelform_factory(model, exclude=exclude)
-    form = Form(request.POST or None, request.FILES or None)
+    if model is PartsRequest and _is_mechanic(request.user):
+        exclude = exclude + ("supplier", "supplier_offer")
+    if model is WorkOrder:
+        form = WorkOrderForm(request.POST or None, workshop=workshop, require_customer=True)
+    else:
+        Form = modelform_factory(model, exclude=exclude)
+        form = Form(request.POST or None, request.FILES or None)
     for field in form.fields.values():
         if hasattr(field, "queryset"):
             related_model = field.queryset.model
             if hasattr(related_model, "workshop"):
                 field.queryset = field.queryset.filter(workshop=workshop)
+                if model is WorkOrder and related_model is CamperOwner:
+                    field.queryset = field.queryset.filter(kind__in=("customer", "both"))
+                if _is_mechanic(request.user) and model is PartsRequest and related_model is WorkOrder:
+                    field.queryset = field.queryset.filter(jobs__assigned_to=request.user).distinct()
+                if _is_mechanic(request.user) and model is PartsRequest and related_model is Job:
+                    field.queryset = field.queryset.filter(assigned_to=request.user)
             elif related_model._meta.label == "accounts.User":
                 field.queryset = related_model.objects.filter(memberships__workshop=workshop, memberships__is_active=True, is_active=True).distinct()
+            elif model is PartsRequest and related_model is PartSupplierOffer:
+                field.queryset = related_model.objects.filter(part__workshop=workshop).select_related("part", "supplier")
     if model is Attachment and "file" in form.fields:
         form.fields["file"].required = True
     if request.method == "POST" and form.is_valid():
         obj = form.save(commit=False)
+        for related in (getattr(obj, "work_order", None), getattr(obj, "job", None), getattr(obj, "part", None), getattr(obj, "vehicle", None), getattr(obj, "customer", None)):
+            if related is not None and getattr(related, "workshop_id", workshop.pk) != workshop.pk:
+                form.add_error(None, "Seleziona un elemento appartenente alla stessa officina.")
+                return render(request, "fleet/workflow_form.html", {"form": form, "title": title, "module": module})
+        if isinstance(obj, WorkOrder) and not _assign_work_order_customer(form, obj):
+            return render(request, "fleet/workflow_form.html", {"form": form, "title": title, "module": module})
         obj.workshop = workshop
         if isinstance(obj, WorkOrder): obj.created_by = request.user
         if isinstance(obj, PartsRequest): obj.requested_by = request.user
+        if isinstance(obj, PartsRequest) and obj.supplier_offer_id:
+            obj.supplier = str(obj.supplier_offer.supplier)
+            obj.purchase_price = obj.supplier_offer.net_purchase_price
         if isinstance(obj, WarrantyClaim): obj.requested_by = request.user
         if isinstance(obj, WarrantyReturn): obj.requested_by = request.user
         if isinstance(obj, JobNote):
@@ -213,21 +336,47 @@ def workflow_create(request, module):
 
 @login_required
 def workflow_edit(request, module, pk):
+    if _is_mechanic(request.user) and module in ("orders", "jobs", "requests", "parts"):
+        return HttpResponseForbidden("La modifica del catalogo è riservata al responsabile; registra un movimento per aggiornare la giacenza.")
+    if module not in ("orders", "jobs", "parts", "requests") and _forbidden_for_mechanic(request):
+        return _forbidden_for_mechanic(request)
+    if module == "owners":
+        return redirect("customer_edit", pk=pk)
+    if module == "parts":
+        return redirect("part_edit", pk=pk)
     workshop = _workshop_or_redirect(request)
     if workshop is None: return redirect("home")
     model, title, _ = _module(module)
     obj = get_object_or_404(model, pk=pk, workshop=workshop)
-    Form = modelform_factory(model, exclude=FORM_EXCLUDES[model])
-    form = Form(request.POST or None, request.FILES or None, instance=obj)
+    if model is WorkOrder:
+        form = WorkOrderForm(request.POST or None, instance=obj, workshop=workshop)
+    else:
+        Form = modelform_factory(model, exclude=FORM_EXCLUDES[model])
+        form = Form(request.POST or None, request.FILES or None, instance=obj)
     for field in form.fields.values():
         if hasattr(field, "queryset"):
             related_model = field.queryset.model
             if hasattr(related_model, "workshop"):
                 field.queryset = field.queryset.filter(workshop=workshop)
+                if _is_mechanic(request.user) and model is PartsRequest and related_model is WorkOrder:
+                    field.queryset = field.queryset.filter(jobs__assigned_to=request.user).distinct()
+                if _is_mechanic(request.user) and model is PartsRequest and related_model is Job:
+                    field.queryset = field.queryset.filter(assigned_to=request.user)
+                if model is WorkOrder and related_model is CamperOwner:
+                    field.queryset = field.queryset.filter(kind__in=("customer", "both"))
             elif related_model._meta.label == "accounts.User":
                 field.queryset = related_model.objects.filter(memberships__workshop=workshop, memberships__is_active=True, is_active=True).distinct()
+            elif model is PartsRequest and related_model is PartSupplierOffer:
+                field.queryset = related_model.objects.filter(part__workshop=workshop).select_related("part", "supplier")
     if request.method == "POST" and form.is_valid():
-        obj = form.save()
+        obj = form.save(commit=False)
+        if isinstance(obj, PartsRequest) and obj.supplier_offer_id:
+            obj.supplier = str(obj.supplier_offer.supplier)
+            obj.purchase_price = obj.supplier_offer.net_purchase_price
+        if isinstance(obj, WorkOrder) and not _assign_work_order_customer(form, obj):
+            return render(request, "fleet/workflow_form.html", {"form": form, "title": f"Modifica · {title}", "module": module})
+        obj.save()
+        form.save_m2m()
         if isinstance(obj, Attachment) and "file" in request.FILES:
             obj.file_name = obj.file.name
             obj.save(update_fields=("file_name",))
@@ -242,6 +391,8 @@ def job_action(request, pk, action):
     workshop = _workshop_or_redirect(request)
     if workshop is None: return redirect("home")
     job = get_object_or_404(Job, pk=pk, workshop=workshop)
+    if _is_mechanic(request.user) and job.assigned_to_id != request.user.pk and job.active_technician_id != request.user.pk:
+        return HttpResponseForbidden("Puoi aggiornare solo i lavori assegnati a te.")
     if request.method != "POST": return redirect("fleet:workflow_list", module="jobs")
     now = timezone.now()
     if action == "start" and job.status in ("not_started", "paused", "waiting_parts", "waiting_warranty"):
@@ -270,6 +421,7 @@ def job_action(request, pk, action):
 
 @login_required
 def parts_request_action(request, pk, action):
+    if _forbidden_for_mechanic(request): return _forbidden_for_mechanic(request)
     workshop = _workshop_or_redirect(request)
     if workshop is None: return redirect("home")
     if request.method == "POST" and action == "deliver":
@@ -278,8 +430,14 @@ def parts_request_action(request, pk, action):
             qty = item.quantity_delivered or item.quantity_requested
             if item.part_id and not item.inventory_applied:
                 part = Part.objects.select_for_update().get(pk=item.part_id, workshop=workshop)
+                if part.quantity < qty * item.conversion_factor:
+                    messages.error(request, "Giacenza insufficiente: carico non registrato.")
+                    return redirect("fleet:workflow_list", module="requests")
                 part.quantity -= qty * item.conversion_factor
                 part.save(update_fields=("quantity", "updated_at"))
+                PartMovement.objects.create(workshop=workshop, part=part, work_order=item.work_order,
+                    movement_type="out", quantity=qty * item.conversion_factor, unit_cost=part.cost_price,
+                    note=f"Prelievo richiesta #{item.pk}", created_by=request.user)
             item.inventory_applied = True
             if item.status != "delivered":
                 item.quantity_delivered = qty
@@ -291,6 +449,8 @@ def parts_request_action(request, pk, action):
 
 @login_required
 def workflow_status_action(request, module, pk):
+    if module not in ("orders", "requests") and _forbidden_for_mechanic(request):
+        return _forbidden_for_mechanic(request)
     workshop = _workshop_or_redirect(request)
     if workshop is None: return redirect("home")
     model = {"orders": WorkOrder, "requests": PartsRequest, "claims": WarrantyClaim, "returns": WarrantyReturn}.get(module)
@@ -299,10 +459,14 @@ def workflow_status_action(request, module, pk):
     status_field = model._meta.get_field("status")
     allowed = {value for value, _ in status_field.choices}
     new_status = request.POST.get("status")
+    if module == "orders" and _is_mechanic(request.user) and new_status not in ("open", "in_progress", "ready_inspection", "additional_work"):
+        return HttpResponseForbidden("La chiusura amministrativa dell'ordine è riservata al personale di accettazione.")
     if new_status not in allowed:
         messages.error(request, "Stato non valido.")
         return redirect("fleet:workflow_list", module=module)
     obj.status = new_status
+    if isinstance(obj, WorkOrder) and new_status == "completed" and obj.completed_at is None:
+        obj.completed_at = timezone.now()
     if isinstance(obj, WarrantyClaim):
         obj.decision_notes = request.POST.get("decision_notes", "")
         obj.approved_hours = request.POST.get("approved_hours") or None
@@ -318,6 +482,165 @@ def workflow_status_action(request, module, pk):
     obj.save()
     _audit(workshop, request.user, "status", model, obj, new_status)
     return redirect("fleet:workflow_list", module=module)
+
+
+@login_required
+def work_order_report(request, pk):
+    if _is_mechanic(request.user):
+        return HttpResponseForbidden("Il prospetto di fatturazione è riservato all'ufficio.")
+    if request.method != "POST":
+        return redirect("orders")
+    workshop = _workshop_or_redirect(request)
+    if workshop is None:
+        return redirect("home")
+    order = get_object_or_404(
+        WorkOrder.objects.select_related("customer", "vehicle"),
+        pk=pk, workshop=workshop, status="completed",
+    )
+
+    # ReportLab Platypus genera un PDF multipagina che il browser può visualizzare e stampare.
+    from reportlab.lib import colors
+    from reportlab.lib.enums import TA_CENTER, TA_RIGHT
+    from reportlab.lib.pagesizes import A4
+    from reportlab.lib.styles import ParagraphStyle, getSampleStyleSheet
+    from reportlab.lib.units import mm
+    from reportlab.platypus import LongTable, Paragraph, SimpleDocTemplate, Spacer, Table, TableStyle
+
+    buffer = BytesIO()
+    styles = getSampleStyleSheet()
+    styles.add(ParagraphStyle(name="ReportSubtitle", parent=styles["Normal"], alignment=TA_CENTER, fontSize=9, textColor=colors.HexColor("#536579")))
+    styles.add(ParagraphStyle(name="SmallCell", parent=styles["BodyText"], fontSize=8, leading=10))
+    styles.add(ParagraphStyle(name="RightCell", parent=styles["SmallCell"], alignment=TA_RIGHT))
+    currency = workshop.currency or "EUR"
+
+    def paragraph(value, style="BodyText"):
+        safe = escape(str(value if value not in (None, "") else "—")).replace("\n", "<br/>")
+        return Paragraph(safe, styles[style])
+
+    def labelled(label, values, style="BodyText"):
+        lines = values if isinstance(values, (tuple, list)) else [values]
+        body = "<br/>".join(escape(str(value)) for value in lines if value not in (None, "")) or "—"
+        return Paragraph(f"<b>{escape(label)}</b><br/>{body}", styles[style])
+
+    def money(value):
+        return f"{value:.2f} {currency}"
+
+    def page_footer(canvas, document):
+        canvas.saveState()
+        canvas.setFont("Helvetica", 8)
+        canvas.setFillColor(colors.HexColor("#536579"))
+        canvas.drawString(18 * mm, 12 * mm, f"RVKeeper · {workshop.name} · Prospetto non fiscale")
+        canvas.drawRightString(192 * mm, 12 * mm, f"Pagina {document.page}")
+        canvas.restoreState()
+
+    doc = SimpleDocTemplate(buffer, pagesize=A4, rightMargin=18 * mm, leftMargin=18 * mm,
+                            topMargin=17 * mm, bottomMargin=20 * mm,
+                            title=f"Prospetto OdL {order.ro_number}", author="RVKeeper")
+    story = [
+        Paragraph("PROSPETTO PER FATTURAZIONE", styles["Title"]),
+        Paragraph("Documento riepilogativo non fiscale · non sostituisce fattura o ricevuta", styles["ReportSubtitle"]),
+        Spacer(1, 8 * mm),
+    ]
+
+    customer = order.customer
+    customer_name = str(customer) if customer else order.customer_name
+    customer_lines = [customer_name or "Cliente non indicato"]
+    if customer:
+        if customer.address: customer_lines.append(customer.address)
+        locality = " ".join(value for value in (customer.postal_code, customer.city) if value)
+        if locality: customer_lines.append(locality)
+        if customer.tax_code: customer_lines.append(f"Codice fiscale: {customer.tax_code}")
+        if customer.vat_number: customer_lines.append(f"Partita IVA: {customer.vat_number}")
+        if customer.phone: customer_lines.append(f"Telefono: {customer.phone}")
+        if customer.email: customer_lines.append(customer.email)
+    vehicle = order.vehicle
+    vehicle_label = " ".join(filter(None, (vehicle.brand, vehicle.model))) if vehicle else " ".join(filter(None, (order.make, order.model)))
+    vehicle_details = [vehicle_label or "Veicolo non indicato"]
+    plate = vehicle.plate if vehicle else ""
+    vin = vehicle.vin if vehicle else ""
+    if plate: vehicle_details.append(f"Targa: {plate}")
+    if vin: vehicle_details.append(f"Telaio: {vin}")
+    if order.odometer is not None: vehicle_details.append(f"Km: {order.odometer}")
+
+    info = Table([
+        [labelled("Officina", workshop.name), labelled("Ordine di lavoro", [f"N. {order.ro_number}", f"Aperto il {timezone.localtime(order.created_at).strftime('%d/%m/%Y')}"])],
+        [labelled("Cliente", customer_lines), labelled("Veicolo", vehicle_details)],
+        [labelled("Chiuso il", timezone.localtime(order.completed_at).strftime("%d/%m/%Y %H:%M") if order.completed_at else "—"), labelled("Richiesta / diagnosi", order.reception_notes or "—")],
+    ], colWidths=(86 * mm, 86 * mm), hAlign="LEFT")
+    info.setStyle(TableStyle([
+        ("BACKGROUND", (0, 0), (-1, -1), colors.HexColor("#F2F6FA")),
+        ("BOX", (0, 0), (-1, -1), .5, colors.HexColor("#C9D5E1")),
+        ("INNERGRID", (0, 0), (-1, -1), .35, colors.HexColor("#D6E0E9")),
+        ("VALIGN", (0, 0), (-1, -1), "TOP"),
+        ("LEFTPADDING", (0, 0), (-1, -1), 8), ("RIGHTPADDING", (0, 0), (-1, -1), 8),
+        ("TOPPADDING", (0, 0), (-1, -1), 7), ("BOTTOMPADDING", (0, 0), (-1, -1), 7),
+    ]))
+    story.extend([info, Spacer(1, 7 * mm), Paragraph("Interventi e manodopera", styles["Heading2"])])
+
+    jobs = list(order.jobs.all())
+    job_rows = [[paragraph("Intervento", "SmallCell"), paragraph("Stato", "SmallCell"), paragraph("Ore", "RightCell"), paragraph("Importo", "RightCell")]]
+    total_minutes = 0
+    for job in jobs:
+        total_minutes += job.net_minutes
+        job_rows.append([labelled(job.title, job.description or "", "SmallCell"),
+                         paragraph(job.get_status_display(), "SmallCell"),
+                         paragraph(f"{job.net_minutes / 60:.2f}", "RightCell"),
+                         paragraph("Da definire", "RightCell")])
+    if not jobs:
+        job_rows.append([paragraph("Nessun lavoro registrato", "SmallCell"), paragraph("—", "SmallCell"), paragraph("0,00", "RightCell"), paragraph("—", "RightCell")])
+    job_table = LongTable(job_rows, colWidths=(89 * mm, 27 * mm, 25 * mm, 31 * mm), repeatRows=1)
+    job_table.setStyle(TableStyle([
+        ("BACKGROUND", (0, 0), (-1, 0), colors.HexColor("#DCE8F2")),
+        ("GRID", (0, 0), (-1, -1), .4, colors.HexColor("#C9D5E1")),
+        ("VALIGN", (0, 0), (-1, -1), "TOP"), ("ALIGN", (2, 1), (-1, -1), "RIGHT"),
+        ("LEFTPADDING", (0, 0), (-1, -1), 6), ("RIGHTPADDING", (0, 0), (-1, -1), 6),
+        ("TOPPADDING", (0, 0), (-1, -1), 5), ("BOTTOMPADDING", (0, 0), (-1, -1), 5),
+    ]))
+    story.extend([job_table, Spacer(1, 3 * mm), paragraph(f"Tempo consuntivo totale: {total_minutes / 60:.2f} ore", "RightCell"), Spacer(1, 5 * mm), Paragraph("Ricambi utilizzati", styles["Heading2"])])
+
+    requests = list(order.parts_requests.filter(status="delivered").select_related("part"))
+    part_rows = [[paragraph("Articolo", "SmallCell"), paragraph("Quantità", "RightCell"), paragraph("Prezzo unitario", "RightCell"), paragraph("Importo", "RightCell")]]
+    parts_total = 0
+    for item in requests:
+        quantity = item.quantity_delivered or item.quantity_requested
+        name = str(item.part) if item.part_id else item.custom_item
+        unit_price = item.part.sale_price if item.part_id else None
+        line_total = quantity * unit_price if unit_price is not None else None
+        if line_total is not None:
+            parts_total += line_total
+        part_rows.append([paragraph(name, "SmallCell"), paragraph(f"{quantity} {item.unit_delivered or item.unit}", "RightCell"),
+                          paragraph(money(unit_price) if unit_price is not None else "Da definire", "RightCell"),
+                          paragraph(money(line_total) if line_total is not None else "Da definire", "RightCell")])
+    if not requests:
+        part_rows.append([paragraph("Nessun ricambio registrato come consegnato", "SmallCell"), paragraph("—", "RightCell"), paragraph("—", "RightCell"), paragraph("—", "RightCell")])
+    part_table = LongTable(part_rows, colWidths=(83 * mm, 29 * mm, 35 * mm, 25 * mm), repeatRows=1)
+    part_table.setStyle(TableStyle([
+        ("BACKGROUND", (0, 0), (-1, 0), colors.HexColor("#DCE8F2")),
+        ("GRID", (0, 0), (-1, -1), .4, colors.HexColor("#C9D5E1")),
+        ("VALIGN", (0, 0), (-1, -1), "TOP"), ("ALIGN", (1, 1), (-1, -1), "RIGHT"),
+        ("LEFTPADDING", (0, 0), (-1, -1), 6), ("RIGHTPADDING", (0, 0), (-1, -1), 6),
+        ("TOPPADDING", (0, 0), (-1, -1), 5), ("BOTTOMPADDING", (0, 0), (-1, -1), 5),
+    ]))
+    total = Table([[paragraph("Totale parziale ricambi a listino", "RightCell"), paragraph(money(parts_total), "RightCell")]], colWidths=(141 * mm, 31 * mm), hAlign="RIGHT")
+    total.setStyle(TableStyle([("LINEABOVE", (0, 0), (-1, 0), .8, colors.HexColor("#12263D")), ("TOPPADDING", (0, 0), (-1, -1), 6)]))
+    story.extend([part_table, Spacer(1, 2 * mm), total, Spacer(1, 8 * mm),
+                  paragraph("Manodopera indicata in ore consuntive; valorizzazione e imposte saranno determinate in fase di fatturazione.", "SmallCell")])
+    doc.build(story, onFirstPage=page_footer, onLaterPages=page_footer)
+    pdf_data = buffer.getvalue()
+
+    if request.POST.get("mark_invoiced") == "1":
+        with transaction.atomic():
+            locked_order = WorkOrder.objects.select_for_update().get(pk=order.pk, workshop=workshop)
+            if not locked_order.invoiced:
+                locked_order.invoiced = True
+                locked_order.invoiced_at = timezone.now()
+                locked_order.invoiced_by = request.user
+                locked_order.save(update_fields=("invoiced", "invoiced_at", "invoiced_by", "updated_at"))
+                _audit(workshop, request.user, "invoiced", WorkOrder, locked_order, "Rapportino contrassegnato come fatturato")
+
+    response = HttpResponse(pdf_data, content_type="application/pdf")
+    response["Content-Disposition"] = f'inline; filename="prospetto-odl-{order.pk}.pdf"'
+    return response
 
 
 @login_required
@@ -360,10 +683,13 @@ def audit_log(request):
 def data_export(request):
     workshop = _workshop_or_redirect(request)
     if workshop is None: return redirect("home")
-    models_to_export = (Workshop, Role, Membership, CamperOwner, Camper, CamperPhoto, WorkOrder, Job, Part,
+    models_to_export = (Workshop, Role, Membership, CamperOwner, Camper, CamperPhoto, WorkOrder, Job, Quote, QuoteLine, Part, PartMovement,
+                        PartSupplierOffer, PartDocument,
                         PartsRequest, WarrantyClaim, WarrantyReturn, JobNote,
                         Attachment, Notification, TimeEvent, JobAssignment, AuditLog)
     querysets = [model.objects.filter(pk=workshop.pk) if model is Workshop
+                 else model.objects.filter(part__workshop=workshop) if model in (PartSupplierOffer, PartDocument)
+                 else model.objects.filter(quote__workshop=workshop) if model is QuoteLine
                  else model.objects.filter(workshop=workshop) if any(f.name == "workshop" for f in model._meta.fields)
                  else model.objects.filter(camper__workshop=workshop) for model in models_to_export]
     payload = serializers.serialize("json", [obj for queryset in querysets for obj in queryset])
