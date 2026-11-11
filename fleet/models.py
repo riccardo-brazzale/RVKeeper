@@ -2,10 +2,44 @@
 from django.db import models
 from django.db.models import Q
 from django.core.exceptions import ValidationError
-from clientandsuppliers.models import CamperOwner
-from parts.models import Part, PartDocument, PartMovement, PartSupplierOffer
-from orders.models import Job, WorkOrder
-from quotes.models import Quote, QuoteLine
+class DocumentCategory(models.Model):
+    """Categorie di documenti gestite dall'amministrazione."""
+    code = models.SlugField(max_length=50, unique=True)
+    name = models.CharField(max_length=100, unique=True)
+    description = models.CharField(max_length=250, blank=True)
+    is_active = models.BooleanField(default=True)
+    sort_order = models.PositiveSmallIntegerField(default=0)
+
+    class Meta:
+        ordering = ("sort_order", "name")
+        verbose_name = "Categoria documento"
+        verbose_name_plural = "Categorie documenti"
+
+    def __str__(self):
+        return self.name
+
+
+def camper_document_path(instance, filename):
+    import os
+    from django.utils.text import slugify
+    camper = instance.camper
+    key = slugify(camper.plate or camper.internal_number) or f"camper-{camper.pk}"
+    return f"campers/{key}/{instance.category.code}/{os.path.basename(filename)}"
+
+
+def attachment_upload_path(instance, filename):
+    import os
+    if instance.work_order_id:
+        key = instance.work_order.ro_number
+        if instance.job_id:
+            key = f"{key}/jobs/{instance.job.job_number}"
+        folder = f"work-orders/{key}"
+    elif instance.job_id:
+        folder = f"jobs/{instance.job_id}"
+    else:
+        folder = "uncategorized"
+    return f"{folder}/{instance.category.code}/{os.path.basename(filename)}"
+
 
 
 class Camper(models.Model):
@@ -32,7 +66,7 @@ class Camper(models.Model):
     )
 
     owner = models.ForeignKey(
-        CamperOwner,
+        "clientandsuppliers.CamperOwner",
         on_delete=models.PROTECT,
         related_name="campers",
         null=True,
@@ -255,9 +289,10 @@ class CamperPhoto(models.Model):
     )
 
     image = models.ImageField(
-        upload_to="fleet/campers/%Y/%m/",
+        upload_to=camper_document_path,
         verbose_name="Fotografia"
     )
+    category = models.ForeignKey(DocumentCategory, on_delete=models.PROTECT, related_name="camper_photos")
 
     caption = models.CharField(
         max_length=200,
@@ -279,10 +314,10 @@ class CamperPhoto(models.Model):
 class PartsRequest(models.Model):
     STATUS_CHOICES = [(v, v.replace("_", " ").title()) for v in ("new", "pending", "preparing", "ready_for_pickup", "delivered", "cancelled")]
     workshop = models.ForeignKey("workshops.Workshop", on_delete=models.CASCADE, related_name="parts_requests")
-    work_order = models.ForeignKey(WorkOrder, on_delete=models.CASCADE, related_name="parts_requests")
-    job = models.ForeignKey(Job, on_delete=models.SET_NULL, null=True, blank=True, related_name="parts_requests")
-    part = models.ForeignKey(Part, on_delete=models.SET_NULL, null=True, blank=True, related_name="requests")
-    supplier_offer = models.ForeignKey("PartSupplierOffer", on_delete=models.SET_NULL, null=True, blank=True, related_name="parts_requests", verbose_name="Offerta fornitore")
+    work_order = models.ForeignKey("orders.WorkOrder", on_delete=models.CASCADE, related_name="parts_requests")
+    job = models.ForeignKey("orders.Job", on_delete=models.SET_NULL, null=True, blank=True, related_name="parts_requests")
+    part = models.ForeignKey("parts.Part", on_delete=models.SET_NULL, null=True, blank=True, related_name="requests")
+    supplier_offer = models.ForeignKey("parts.PartSupplierOffer", on_delete=models.SET_NULL, null=True, blank=True, related_name="parts_requests", verbose_name="Offerta fornitore")
     custom_item = models.CharField(max_length=200, blank=True)
     unit = models.CharField(max_length=30, default="each")
     quantity_requested = models.DecimalField(max_digits=12, decimal_places=2, default=1)
@@ -321,8 +356,8 @@ class PartsRequest(models.Model):
 class WarrantyClaim(models.Model):
     STATUS_CHOICES = [(v, v.replace("_", " ").title()) for v in ("submitted", "in_review", "approved", "partially_approved", "declined")]
     workshop = models.ForeignKey("workshops.Workshop", on_delete=models.CASCADE, related_name="warranty_claims")
-    work_order = models.ForeignKey(WorkOrder, on_delete=models.CASCADE, related_name="warranty_claims")
-    job = models.ForeignKey(Job, on_delete=models.SET_NULL, null=True, blank=True, related_name="warranty_claims")
+    work_order = models.ForeignKey("orders.WorkOrder", on_delete=models.CASCADE, related_name="warranty_claims")
+    job = models.ForeignKey("orders.Job", on_delete=models.SET_NULL, null=True, blank=True, related_name="warranty_claims")
     component = models.CharField(max_length=200, blank=True)
     problem_description = models.TextField()
     work_needed = models.TextField(blank=True)
@@ -344,9 +379,9 @@ class WarrantyClaim(models.Model):
 class WarrantyReturn(models.Model):
     STATUS_CHOICES = [(v, v.replace("_", " ").title()) for v in ("submitted", "in_review", "return_approved", "replacement_approved", "credit_approved", "declined")]
     workshop = models.ForeignKey("workshops.Workshop", on_delete=models.CASCADE, related_name="warranty_returns")
-    work_order = models.ForeignKey(WorkOrder, on_delete=models.CASCADE, related_name="warranty_returns")
-    job = models.ForeignKey(Job, on_delete=models.SET_NULL, null=True, blank=True, related_name="warranty_returns")
-    parts_request = models.ForeignKey(PartsRequest, on_delete=models.SET_NULL, null=True, blank=True, related_name="warranty_returns")
+    work_order = models.ForeignKey("orders.WorkOrder", on_delete=models.CASCADE, related_name="warranty_returns")
+    job = models.ForeignKey("orders.Job", on_delete=models.SET_NULL, null=True, blank=True, related_name="warranty_returns")
+    parts_request = models.ForeignKey("fleet.PartsRequest", on_delete=models.SET_NULL, null=True, blank=True, related_name="warranty_returns")
     part_name = models.CharField(max_length=200)
     part_number = models.CharField(max_length=80, blank=True)
     quantity = models.DecimalField(max_digits=12, decimal_places=2, default=1)
@@ -369,7 +404,7 @@ class WarrantyReturn(models.Model):
 
 class JobNote(models.Model):
     workshop = models.ForeignKey("workshops.Workshop", on_delete=models.CASCADE, related_name="job_notes")
-    job = models.ForeignKey(Job, on_delete=models.CASCADE, related_name="notes")
+    job = models.ForeignKey("orders.Job", on_delete=models.CASCADE, related_name="notes")
     author = models.ForeignKey("accounts.User", on_delete=models.SET_NULL, null=True, blank=True, related_name="job_notes")
     department = models.CharField(max_length=30, blank=True)
     text = models.TextField()
@@ -383,14 +418,26 @@ class JobNote(models.Model):
 
 class Attachment(models.Model):
     workshop = models.ForeignKey("workshops.Workshop", on_delete=models.CASCADE, related_name="attachments")
-    work_order = models.ForeignKey(WorkOrder, on_delete=models.CASCADE, null=True, blank=True, related_name="attachments")
-    job = models.ForeignKey(Job, on_delete=models.CASCADE, null=True, blank=True, related_name="attachments")
-    file = models.FileField(upload_to="fleet/attachments/%Y/%m/")
+    work_order = models.ForeignKey("orders.WorkOrder", on_delete=models.CASCADE, null=True, blank=True, related_name="attachments")
+    job = models.ForeignKey("orders.Job", on_delete=models.CASCADE, null=True, blank=True, related_name="attachments")
+    category = models.ForeignKey(DocumentCategory, on_delete=models.PROTECT, related_name="work_attachments")
+    file = models.FileField(upload_to=attachment_upload_path)
     file_name = models.CharField(max_length=255)
     caption = models.CharField(max_length=250, blank=True)
     uploaded_by = models.ForeignKey("accounts.User", on_delete=models.SET_NULL, null=True, blank=True, related_name="attachments")
     department = models.CharField(max_length=30, blank=True)
     created_at = models.DateTimeField(auto_now_add=True)
+
+    def clean(self):
+        super().clean()
+        if not self.work_order_id and not self.job_id:
+            raise ValidationError("Collega l'allegato a un ordine di lavoro o a una lavorazione.")
+        if self.work_order_id and self.job_id and self.job.work_order_id != self.work_order_id:
+            raise ValidationError("La lavorazione selezionata non appartiene all'ordine scelto.")
+        if self.work_order_id and self.job_id and self.job.work_order_id != self.work_order_id:
+            raise ValidationError("La lavorazione selezionata non appartiene all'ordine scelto.")
+        if self.work_order_id and self.job_id and self.job.work_order_id != self.work_order_id:
+            raise ValidationError("La lavorazione selezionata non appartiene all'ordine scelto.")
 
     def __str__(self):
         return self.file_name
@@ -402,7 +449,7 @@ class Notification(models.Model):
     title = models.CharField(max_length=200)
     body = models.TextField(blank=True)
     link = models.CharField(max_length=500, blank=True)
-    work_order = models.ForeignKey(WorkOrder, on_delete=models.CASCADE, null=True, blank=True, related_name="notifications")
+    work_order = models.ForeignKey("orders.WorkOrder", on_delete=models.CASCADE, null=True, blank=True, related_name="notifications")
     read = models.BooleanField(default=False)
     created_at = models.DateTimeField(auto_now_add=True)
 
@@ -414,11 +461,12 @@ class Notification(models.Model):
 
 
 class TimeEvent(models.Model):
-    EVENT_CHOICES = [(v, v.title()) for v in ("start", "pause", "finish", "waiting")]
+    EVENT_CHOICES = [(v, v.title()) for v in ("start", "pause", "resume", "finish", "waiting", "reopen")]
     workshop = models.ForeignKey("workshops.Workshop", on_delete=models.CASCADE, related_name="time_events")
-    job = models.ForeignKey(Job, on_delete=models.CASCADE, related_name="time_events")
+    job = models.ForeignKey("orders.Job", on_delete=models.CASCADE, related_name="time_events")
     mechanic = models.ForeignKey("accounts.User", on_delete=models.SET_NULL, null=True, blank=True, related_name="time_events")
     event_type = models.CharField(max_length=20, choices=EVENT_CHOICES)
+    pause_reason = models.ForeignKey("orders.PauseReason", on_delete=models.PROTECT, null=True, blank=True, related_name="time_events")
     event_at = models.DateTimeField()
     note = models.TextField(blank=True)
 
@@ -428,7 +476,7 @@ class TimeEvent(models.Model):
 
 class JobAssignment(models.Model):
     workshop = models.ForeignKey("workshops.Workshop", on_delete=models.CASCADE, related_name="job_assignments")
-    job = models.ForeignKey(Job, on_delete=models.CASCADE, related_name="assignments")
+    job = models.ForeignKey("orders.Job", on_delete=models.CASCADE, related_name="assignments")
     from_technician = models.ForeignKey("accounts.User", on_delete=models.SET_NULL, null=True, blank=True, related_name="assignments_from")
     to_technician = models.ForeignKey("accounts.User", on_delete=models.SET_NULL, null=True, blank=True, related_name="assignments_to")
     reason = models.CharField(max_length=200, blank=True)
@@ -442,9 +490,32 @@ class AuditLog(models.Model):
     action = models.CharField(max_length=30)
     entity_type = models.CharField(max_length=100)
     entity_id = models.CharField(max_length=100, blank=True)
-    work_order = models.ForeignKey(WorkOrder, on_delete=models.SET_NULL, null=True, blank=True, related_name="audit_logs")
+    work_order = models.ForeignKey("orders.WorkOrder", on_delete=models.SET_NULL, null=True, blank=True, related_name="audit_logs")
     details = models.TextField(blank=True)
     created_at = models.DateTimeField(auto_now_add=True)
 
     class Meta:
         ordering = ("-created_at",)
+
+
+class JobParticipation(models.Model):
+    """Partecipazione individuale: più tecnici possono lavorare sullo stesso Job."""
+    SOURCE_CHOICES = [("assigned", "Chiamata/assegnazione"), ("self", "Iniziativa propria")]
+    workshop = models.ForeignKey("workshops.Workshop", on_delete=models.CASCADE, related_name="job_participations")
+    job = models.ForeignKey("orders.Job", on_delete=models.CASCADE, related_name="participations")
+    mechanic = models.ForeignKey("accounts.User", on_delete=models.CASCADE, related_name="job_participations")
+    source = models.CharField(max_length=12, choices=SOURCE_CHOICES, default="assigned")
+    is_active = models.BooleanField(default=True)
+    started_at = models.DateTimeField(null=True, blank=True)
+    paused_at = models.DateTimeField(null=True, blank=True)
+    finished_at = models.DateTimeField(null=True, blank=True)
+    created_at = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        constraints = [models.UniqueConstraint(fields=("job", "mechanic"), condition=models.Q(is_active=True), name="unique_active_job_mechanic")]
+        ordering = ("-created_at",)
+
+    def __str__(self):
+        return f"{self.mechanic} · {self.job}"
+
+

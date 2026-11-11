@@ -1,6 +1,8 @@
 from django import forms
 
-from .models import Camper, CamperOwner, WorkOrder
+from clientandsuppliers.models import CamperOwner
+from orders.models import WorkOrder
+from .models import Camper, CamperPhoto
 from parts.forms import PartDocumentForm, PartSupplierOfferForm
 
 
@@ -49,3 +51,13 @@ class WorkOrderForm(forms.ModelForm):
             help_text="Nome e telefono dell’ordine vengono sincronizzati dalla scheda cliente.",
         )
         self.fields["vehicle"].queryset = Camper.objects.filter(workshop=workshop)
+
+
+class CamperPhotoForm(forms.ModelForm):
+    class Meta:
+        model = CamperPhoto
+        fields = ("category", "image", "caption")
+
+    def __init__(self, *args, **kwargs):
+        super().__init__(*args, **kwargs)
+        self.fields["category"].queryset = self.fields["category"].queryset.filter(is_active=True)

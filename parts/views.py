@@ -7,7 +7,9 @@ from django.http import Http404, HttpResponseForbidden
 from django.shortcuts import get_object_or_404, redirect, render
 
 from workshops.models import Membership
-from fleet.models import AuditLog, Notification, Part, PartDocument, PartMovement, PartSupplierOffer, WorkOrder
+from fleet.models import AuditLog, Notification
+from orders.models import WorkOrder
+from .models import Part, PartDocument, PartMovement, PartSupplierOffer
 from .forms import PartDocumentForm, PartForm, PartSupplierOfferForm
 
 
@@ -104,7 +106,7 @@ def part_detail(request, pk):
     return render(request, "parts/part_detail.html", {
         "part": part,
         "offers": [] if is_mechanic else part.supplier_offers.select_related("supplier"),
-        "documents": part.documents.select_related("uploaded_by"),
+        "documents": part.documents.select_related("uploaded_by", "category"),
         "is_mechanic": is_mechanic,
     })
 

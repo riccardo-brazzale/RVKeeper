@@ -1,6 +1,5 @@
 # Clienti e fornitori
 
-Questo pacchetto raccoglie i modelli, i form, le viste e gli URL dell'anagrafica commerciale.
-I modelli dichiarano ancora l'etichetta Django `fleet`: questo mantiene invariati tabelle,
-content type, permessi e riferimenti delle migrazioni esistenti mentre il codice viene
-organizzato per dominio. `fleet.models.CamperOwner` resta disponibile come import compatibile.
+Questa app possiede le proprie tabelle `clientandsuppliers_*` per le anagrafiche commerciali e i documenti allegati. Una singola anagrafica può essere cliente, fornitore o entrambi e può avere più documenti classificati tramite `fleet.DocumentCategory`.
+
+Gli allegati sono archiviati sotto `MEDIA_ROOT/contacts/<nome-o-ragione-sociale>/<categoria>/` e consultabili dalla scheda del contatto.

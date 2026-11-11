@@ -1,0 +1,156 @@
+/* Desktop gestionale. La vista mobile resta gestita dagli stili originali in base.html. */
+@media (min-width: 761px) {
+    :root {
+        --rv-ink: #172b43;
+        --rv-muted: #66778a;
+        --rv-line: #dce5ee;
+        --rv-surface: #fff;
+        --rv-canvas: #f2f5f9;
+        --rv-accent: #1675c1;
+        --rv-shadow: 0 8px 24px rgba(25, 48, 75, .07);
+    }
+
+    body {
+        color: var(--rv-ink);
+        background-color: var(--rv-canvas);
+        background-image: linear-gradient(rgba(11, 29, 48, .48), rgba(11, 29, 48, .48)), url("../images/rv-background.webp");
+        background-position: center;
+        background-size: cover;
+        background-attachment: fixed;
+        background-repeat: no-repeat;
+    }
+
+    .app-header {
+        position: sticky;
+        top: 0;
+        z-index: 30;
+        min-height: 68px;
+        padding: 8px 28px;
+        border-bottom: 1px solid rgba(255,255,255,.1);
+        box-shadow: 0 4px 18px rgba(10, 28, 49, .16);
+    }
+
+    .brand img { height: 54px; }
+    .user-actions { gap: 18px; }
+    .user-email { color: #d4e3f2; font-size: 13px; }
+
+    .app-layout { min-height: calc(100vh - 68px); }
+
+    .sidebar {
+        position: sticky;
+        top: 68px;
+        align-self: flex-start;
+        height: calc(100vh - 68px);
+        flex-basis: 246px;
+        padding: 22px 13px;
+        background: #132a43;
+        box-shadow: 5px 0 20px rgba(13, 36, 60, .08);
+    }
+
+    .sidebar-label {
+        margin: 20px 12px 7px;
+        color: #78dfa2;
+        font-size: 11px;
+        font-weight: 800;
+        letter-spacing: .12em;
+        text-shadow: 0 0 12px rgba(120, 223, 162, .12);
+    }
+    .sidebar-label:first-child { margin-top: 0; }
+    .sidebar nav { gap: 3px; }
+    .sidebar nav a {
+        padding: 10px 12px;
+        border: 1px solid transparent;
+        color: #dbe7f3;
+        font-size: 13px;
+        transition: background .16s ease, border-color .16s ease, transform .16s ease;
+    }
+    .sidebar nav a:hover { transform: translateX(2px); }
+    .sidebar nav a[aria-current="page"] {
+        border-color: rgba(133, 194, 247, .18);
+        background: rgba(68, 145, 211, .23);
+        box-shadow: inset 3px 0 #69b7ff;
+    }
+
+    .workspace {
+        min-height: calc(100vh - 68px);
+        padding: 30px clamp(24px, 3vw, 52px) 20px;
+    }
+    main { max-width: 1500px; }
+
+    .page-heading {
+        min-height: 66px;
+        margin-bottom: 22px;
+        padding-bottom: 15px;
+        border-bottom: 1px solid var(--rv-line);
+    }
+    .page-heading h2, main > h2 {
+        margin: 0;
+        color: #183958;
+        font-size: clamp(24px, 2vw, 31px);
+        letter-spacing: -.035em;
+    }
+    .page-heading p { margin: 6px 0 0; color: var(--rv-muted); font-size: 14px; }
+
+    .panel {
+        border: 1px solid rgba(206, 218, 230, .85);
+        border-radius: 12px;
+        background: var(--rv-surface);
+        background-image: none;
+        box-shadow: var(--rv-shadow);
+    }
+    .panel h3 { margin-top: 0; color: #203e5d; }
+    .summary-grid { grid-template-columns: repeat(4, minmax(170px, 1fr)); gap: 14px; }
+    .summary-grid .panel {
+        position: relative;
+        min-height: 140px;
+        overflow: hidden;
+        padding: 20px 21px;
+        transition: transform .16s ease, box-shadow .16s ease;
+    }
+    .summary-grid .panel:hover { transform: translateY(-2px); box-shadow: 0 12px 28px rgba(25,48,75,.12); }
+    .summary-grid .panel::after {
+        position: absolute;
+        right: -21px;
+        bottom: -36px;
+        width: 105px;
+        height: 105px;
+        border: 17px solid rgba(22,117,193,.07);
+        border-radius: 50%;
+        content: "";
+        pointer-events: none;
+    }
+    .summary-grid .panel > strong { color: var(--rv-muted); font-size: 12px; text-transform: uppercase; letter-spacing: .045em; }
+    .metric { color: var(--rv-accent); font-size: 36px; letter-spacing: -.04em; }
+    .summary-grid a { color: var(--rv-accent); font-size: 13px; font-weight: 700; text-decoration: none; }
+    .summary-grid a:hover { text-decoration: underline; }
+
+    .table-wrap { border: 1px solid var(--rv-line); border-radius: 9px; }
+    table { background: white; font-size: 13px; }
+    th, td { padding: 11px 13px; }
+    th { position: sticky; top: 0; z-index: 1; color: #435970; background: #f4f7fa; font-size: 11px; text-transform: uppercase; letter-spacing: .04em; }
+    tbody tr:hover { background: #f6faff; }
+    .button-link, button { border-radius: 7px; font-weight: 700; }
+    .button-link { box-shadow: 0 3px 8px rgba(22,117,193,.18); }
+    input, select, textarea { border-radius: 7px !important; }
+    footer { color: #718196; text-shadow: none; font-size: 12px; }
+}
+
+/* Piccolo indicatore di caricamento per le transizioni AJAX desktop. */
+.spa-progress {
+    position: fixed;
+    top: 0;
+    left: 0;
+    z-index: 1000;
+    width: 0;
+    height: 3px;
+    opacity: 0;
+    background: #67bdff;
+    box-shadow: 0 0 12px rgba(103,189,255,.75);
+    transition: width .2s ease, opacity .15s ease;
+}
+.spa-progress.is-loading { width: 72%; opacity: 1; }
+.spa-progress.is-done { width: 100%; opacity: 0; }
+
+@media (max-width: 760px) {
+    .spa-progress { display: none; }
+}

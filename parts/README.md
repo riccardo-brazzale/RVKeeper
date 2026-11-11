@@ -1,6 +1,5 @@
-# Articoli e ricambi
+# Ricambi e magazzino
 
-Questo pacchetto raccoglie catalogo, offerte fornitore, allegati e movimenti di magazzino.
-I modelli conservano l'etichetta Django `fleet` per non rinominare tabelle, content type,
-permessi o relazioni già in uso. `fleet.models.Part` e gli altri import storici restano alias
-compatibili; gli URL pubblici e i relativi nomi continuano a essere serviti da questo modulo.
+Questa app possiede il proprio schema (`parts_*`): articoli, offerte fornitore, documenti classificati e movimenti di magazzino. Le categorie documento sono configurate dall'admin tramite `fleet.DocumentCategory`; ogni articolo può avere più foto, manuali e schede tecniche. I file sono archiviati sotto `MEDIA_ROOT/parts/<codice>/<categoria>/`.
+
+Le viste filtrano per officina e registrano le variazioni stock come movimenti collegabili a un ordine di lavoro.

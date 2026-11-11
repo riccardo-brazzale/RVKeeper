@@ -6,7 +6,9 @@ from django.shortcuts import get_object_or_404, redirect, render
 from django.utils import timezone
 
 from clientandsuppliers.models import CamperOwner
-from fleet.models import AuditLog, Job, PartsRequest, WorkOrder
+from fleet.models import AuditLog, Camper, PartsRequest
+from orders.models import Job, WorkOrder
+from parts.models import Part
 from workshops.models import Membership, Workshop
 from .forms import QuoteForm, QuoteLineFormSet
 from .models import Quote

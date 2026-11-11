@@ -2,6 +2,15 @@ from django.core.exceptions import ValidationError
 from django.db import models
 
 
+def contact_document_path(instance, filename):
+    import os
+    from django.utils.text import slugify
+    contact = instance.contact
+    label = contact.company_name if contact.is_company else f"{contact.last_name}-{contact.first_name}"
+    key = slugify(label) or f"contact-{contact.pk}"
+    return f"contacts/{key}/{instance.category.code}/{os.path.basename(filename)}"
+
+
 class CamperOwner(models.Model):
     """Contatto commerciale usato come cliente, fornitore o entrambi."""
 
@@ -29,7 +38,6 @@ class CamperOwner(models.Model):
     created_at = models.DateTimeField(auto_now_add=True)
 
     class Meta:
-        app_label = "fleet"
         ordering = ["last_name", "first_name", "company_name"]
         verbose_name = "Contatto commerciale"
         verbose_name_plural = "Clienti e fornitori"
@@ -57,5 +65,19 @@ class CamperOwner(models.Model):
         return self.kind in ("supplier", "both")
 
 
+class ContactDocument(models.Model):
+    contact = models.ForeignKey(CamperOwner, on_delete=models.CASCADE, related_name="documents")
+    category = models.ForeignKey("fleet.DocumentCategory", on_delete=models.PROTECT, related_name="contact_documents")
+    file = models.FileField(upload_to=contact_document_path)
+    caption = models.CharField(max_length=250, blank=True)
+    uploaded_by = models.ForeignKey("accounts.User", on_delete=models.SET_NULL, null=True, blank=True)
+    created_at = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        ordering = ("-created_at",)
+
+    def __str__(self):
+        return self.caption or self.file.name
+
+
 # Compatibilità con gli import storici e con la serializzazione dei dati.
-BusinessPartner = CamperOwner

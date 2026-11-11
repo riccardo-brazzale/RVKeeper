@@ -92,12 +92,14 @@
         @media (max-width: 600px) { .form-grid { grid-template-columns: 1fr; } .form-grid .full-width { grid-column: auto; } }
         @media (prefers-reduced-motion: reduce) { *, *::before, *::after { scroll-behavior: auto !important; transition-duration: .01ms !important; } }
     </style>
+    <link rel="stylesheet" href="{% static 'css/app.css' %}">
+    <script src="{% static 'js/app.js' %}" defer></script>
     {% block extra_css %}{% endblock %}
 </head>
 <body>
 <header class="app-header">
     {% if user.is_authenticated %}
-        <button class="menu-toggle" type="button" aria-controls="primary-navigation" aria-expanded="false" aria-label="Apri menu"><span aria-hidden="true">☰</span><span>Menu</span></button>
+        <button class="menu-toggle" type="button" aria-controls="primary-navigation" aria-expanded="false" aria-label="Apri menu"><span aria-hidden="true">â˜°</span><span>Menu</span></button>
     {% endif %}
     <a class="brand" href="/" aria-label="RVKeeper, home"><img src="{% static 'images/cropped-logo-1.webp' %}" alt="RVKeeper"></a>
     {% if user.is_authenticated %}
@@ -113,7 +115,7 @@
         <nav aria-label="Navigazione principale">
             {% if user.department != 'technician' %}<p class="sidebar-label">Controllo</p><a href="{% url 'home' %}" {% if request.resolver_match.url_name == 'home' %}aria-current="page"{% endif %}>Dashboard</a>
             <p class="sidebar-label">Anagrafiche</p><a href="{% url 'customers' %}" {% if request.resolver_match.url_name == 'customers' or request.resolver_match.url_name == 'customer_create' %}aria-current="page"{% endif %}>Clienti e fornitori</a><a href="{% url 'fleet:camper_list' %}" {% if request.resolver_match.namespace == 'fleet' %}aria-current="page"{% endif %}>Parco mezzi</a>{% endif %}
-            <p class="sidebar-label">Officina</p><a href="{% url 'orders' %}" {% if request.resolver_match.url_name == 'orders' or request.resolver_match.url_name == 'order_create' %}aria-current="page"{% endif %}>Ordini di lavoro</a>
+            <p class="sidebar-label">Officina</p><a href="{% url 'my_jobs' %}">Le mie lavorazioni</a><a href="{% url 'orders' %}" {% if request.resolver_match.url_name == 'orders' or request.resolver_match.url_name == 'order_create' %}aria-current="page"{% endif %}>Ordini di lavoro</a>
             {% if user.department != 'technician' %}<a href="{% url 'quotes' %}" {% if request.resolver_match.url_name == 'quotes' or request.resolver_match.url_name == 'quote_create' or request.resolver_match.url_name == 'quote_detail' or request.resolver_match.url_name == 'quote_edit' %}aria-current="page"{% endif %}>Preventivi</a>{% endif %}
             <p class="sidebar-label">Avanzamenti</p><a href="{% url 'jobs' %}" {% if request.resolver_match.url_name == 'jobs' or request.resolver_match.url_name == 'job_create' %}aria-current="page"{% endif %}>Lavori e tecnici</a>
             <p class="sidebar-label">Ricambi</p><a href="{% url 'inventory' %}" {% if request.resolver_match.url_name == 'inventory' or request.resolver_match.url_name == 'part_create' %}aria-current="page"{% endif %}>Magazzino e listino</a>
@@ -128,14 +130,14 @@
             <a href="{% url 'attachments' %}" {% if request.resolver_match.url_name == 'attachments' or request.resolver_match.url_name == 'attachment_create' %}aria-current="page"{% endif %}>Allegati</a>
             <a href="{% url 'report' %}" {% if request.resolver_match.url_name == 'report' %}aria-current="page"{% endif %}>Report</a>
             <a href="{% url 'notifications' %}" {% if request.resolver_match.url_name == 'notifications' %}aria-current="page"{% endif %}>Notifiche</a>
-            <a href="{% url 'audit_log' %}" {% if request.resolver_match.url_name == 'audit_log' %}aria-current="page"{% endif %}>Registro attività</a>
+            <a href="{% url 'audit_log' %}" {% if request.resolver_match.url_name == 'audit_log' %}aria-current="page"{% endif %}>Registro attivitÃ </a>
             <a href="{% url 'data_export' %}">Esporta backup</a>
             {% endif %}
         </nav>
     </aside>
     <button class="menu-backdrop" type="button" aria-label="Chiudi menu"></button>
     {% endif %}
-    <div class="workspace"><main>{% if messages %}<ul class="messages">{% for message in messages %}<li>{{ message }}</li>{% endfor %}</ul>{% endif %}{% block content %}{% endblock %}</main><footer>RVKeeper - Camper Maintenance Management</footer></div>
+    <div class="workspace"><main id="page-content" tabindex="-1" aria-live="polite">{% if messages %}<ul class="messages">{% for message in messages %}<li>{{ message }}</li>{% endfor %}</ul>{% endif %}{% block content %}{% endblock %}</main><footer>RVKeeper - Camper Maintenance Management</footer></div>
 </div>
 <script>
     (() => {

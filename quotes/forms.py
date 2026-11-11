@@ -2,7 +2,8 @@ from django import forms
 from django.forms import inlineformset_factory
 
 from clientandsuppliers.models import CamperOwner
-from fleet.models import Camper, Part
+from fleet.models import Camper
+from parts.models import Part
 from .models import Quote, QuoteLine
 
 

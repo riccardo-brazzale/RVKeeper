@@ -6,7 +6,11 @@ from django.contrib import admin
 APP_ORDER = {
     "workshops": 0,
     "accounts": 1,
-    "fleet": 2,
+    "clientandsuppliers": 2,
+    "fleet": 3,
+    "orders": 4,
+    "parts": 5,
+    "quotes": 6,
 }
 
 MODEL_ORDER = {

@@ -2,6 +2,13 @@ from django.core.exceptions import ValidationError
 from django.db import models
 
 
+def part_document_path(instance, filename):
+    import os
+    from django.utils.text import slugify
+    key = slugify(instance.part.part_number) or f"part-{instance.part_id}"
+    return f"parts/{key}/{instance.category.code}/{os.path.basename(filename)}"
+
+
 class Part(models.Model):
     workshop = models.ForeignKey("workshops.Workshop", on_delete=models.CASCADE, related_name="parts")
     part_number = models.CharField(max_length=80)
@@ -18,7 +25,6 @@ class Part(models.Model):
     updated_at = models.DateTimeField(auto_now=True)
 
     class Meta:
-        app_label = "fleet"
         ordering = ("name",)
         constraints = [models.UniqueConstraint(fields=("workshop", "part_number"), name="unique_part_number_per_workshop")]
 
@@ -28,7 +34,7 @@ class Part(models.Model):
 
 class PartSupplierOffer(models.Model):
     part = models.ForeignKey(Part, on_delete=models.CASCADE, related_name="supplier_offers")
-    supplier = models.ForeignKey("fleet.CamperOwner", on_delete=models.PROTECT, related_name="part_offers")
+    supplier = models.ForeignKey("clientandsuppliers.CamperOwner", on_delete=models.PROTECT, related_name="part_offers")
     supplier_code = models.CharField(max_length=100, blank=True, verbose_name="Codice fornitore")
     purchase_price = models.DecimalField(max_digits=12, decimal_places=2, verbose_name="Prezzo d'acquisto")
     discount_percent = models.DecimalField(max_digits=5, decimal_places=2, default=0, verbose_name="Sconto (%)")
@@ -38,7 +44,6 @@ class PartSupplierOffer(models.Model):
     updated_at = models.DateTimeField(auto_now=True)
 
     class Meta:
-        app_label = "fleet"
         ordering = ("purchase_price", "supplier__company_name", "supplier__last_name")
         constraints = [models.UniqueConstraint(fields=("part", "supplier"), name="unique_supplier_offer_per_part")]
 
@@ -65,24 +70,18 @@ class PartSupplierOffer(models.Model):
 
 
 class PartDocument(models.Model):
-    TYPES = [("datasheet", "Scheda tecnica"), ("photo", "Foto")]
     part = models.ForeignKey(Part, on_delete=models.CASCADE, related_name="documents")
-    document_type = models.CharField(max_length=12, choices=TYPES)
-    file = models.FileField(upload_to="fleet/parts/%Y/%m/")
+    category = models.ForeignKey("fleet.DocumentCategory", on_delete=models.PROTECT, related_name="part_documents")
+    file = models.FileField(upload_to=part_document_path)
     caption = models.CharField(max_length=200, blank=True, verbose_name="Descrizione")
     uploaded_by = models.ForeignKey("accounts.User", on_delete=models.SET_NULL, null=True, blank=True)
     created_at = models.DateTimeField(auto_now_add=True)
 
     class Meta:
-        app_label = "fleet"
         ordering = ("-created_at",)
 
     def clean(self):
         super().clean()
-        if self.document_type == "photo" and self.file:
-            suffix = self.file.name.rsplit(".", 1)[-1].lower() if "." in self.file.name else ""
-            if suffix not in {"jpg", "jpeg", "png", "webp", "gif"}:
-                raise ValidationError({"file": "Per una foto usa un file JPG, PNG, WEBP o GIF."})
 
 
 class PartMovement(models.Model):
@@ -90,7 +89,7 @@ class PartMovement(models.Model):
     TYPES = [("in", "Carico"), ("out", "Scarico"), ("adjustment", "Rettifica")]
     workshop = models.ForeignKey("workshops.Workshop", on_delete=models.CASCADE, related_name="part_movements")
     part = models.ForeignKey(Part, on_delete=models.PROTECT, related_name="movements")
-    work_order = models.ForeignKey("fleet.WorkOrder", on_delete=models.SET_NULL, null=True, blank=True, related_name="part_movements")
+    work_order = models.ForeignKey("orders.WorkOrder", on_delete=models.SET_NULL, null=True, blank=True, related_name="part_movements")
     movement_type = models.CharField(max_length=12, choices=TYPES)
     quantity = models.DecimalField(max_digits=12, decimal_places=2)
     unit_cost = models.DecimalField(max_digits=12, decimal_places=2, default=0)
@@ -99,7 +98,6 @@ class PartMovement(models.Model):
     created_at = models.DateTimeField(auto_now_add=True)
 
     class Meta:
-        app_label = "fleet"
         ordering = ("-created_at",)
 
     def __str__(self):

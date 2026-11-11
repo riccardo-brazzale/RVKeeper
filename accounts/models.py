@@ -60,6 +60,7 @@ class User(AbstractUser):
     ]
     DEPARTMENT_CHOICES = [(v, v.title()) for v in ("reception", "technician", "details", "parts", "warranty", "admin")]
     SPECIALTY_CHOICES = [(v, v.title()) for v in ("interior", "engine", "body", "general", "detailing")]
+    SENIORITY_CHOICES = [("technician", "Meccanico"), ("senior", "Meccanico senior"), ("manager", "Responsabile")]
 
     email = models.EmailField(
         verbose_name="Email"
@@ -74,6 +75,7 @@ class User(AbstractUser):
 
     department = models.CharField(max_length=20, choices=DEPARTMENT_CHOICES, default="reception", verbose_name="Reparto")
     specialty = models.CharField(max_length=20, choices=SPECIALTY_CHOICES, blank=True, verbose_name="Specialità")
+    seniority = models.CharField(max_length=20, choices=SENIORITY_CHOICES, default="technician", verbose_name="Livello operativo")
 
     class Meta:
         verbose_name = "Utente"

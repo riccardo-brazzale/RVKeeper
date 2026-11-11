@@ -4,5 +4,5 @@
 <div class="summary-grid"><div class="panel"><strong>Minuti lavorati registrati</strong><p class="metric">{{ total_minutes }}</p></div><div class="panel"><strong>Richieste ricambi aperte</strong><p class="metric">{{ open_requests }}</p></div></div>
 <div class="panel"><h3>Ordini per stato</h3>{% for row in orders %}<p>{{ row.status|title }}: {{ row.total }}</p>{% empty %}<p>Nessun dato disponibile.</p>{% endfor %}</div>
 <div class="panel"><h3>Lavori per stato</h3>{% for row in jobs %}<p>{{ row.status|title }}: {{ row.total }}</p>{% empty %}<p>Nessun dato disponibile.</p>{% endfor %}</div>
-<div class="panel"><h3>Tempo registrato per tecnico</h3>{% for row in technician_time %}<p>{{ row.active_technician__email|default:"Non assegnato" }}: {{ row.minutes }} minuti</p>{% empty %}<p>Nessun dato disponibile.</p>{% endfor %}</div>
+<div class="panel"><h3>Tempo registrato per tecnico</h3>{% for row in technician_time %}<p>{{ row.mechanic|default:"Utente rimosso" }}: {{ row.minutes }} minuti</p>{% empty %}<p>Nessun dato disponibile.</p>{% endfor %}</div>
 {% endblock %}

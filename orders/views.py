@@ -29,3 +29,11 @@ def job_create(request):
 
 def job_action(request, pk, action):
     return fleet_views.job_action(request, pk, action)
+
+
+def my_jobs(request):
+    return fleet_views.my_jobs(request)
+
+
+def my_jobs(request):
+    return fleet_views.my_jobs(request)

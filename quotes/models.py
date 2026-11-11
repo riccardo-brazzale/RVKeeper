@@ -12,9 +12,9 @@ class Quote(models.Model):
 
     workshop = models.ForeignKey("workshops.Workshop", on_delete=models.CASCADE, related_name="quotes")
     quote_number = models.CharField(max_length=40, verbose_name="Numero preventivo")
-    customer = models.ForeignKey("fleet.CamperOwner", on_delete=models.PROTECT, related_name="quotes")
+    customer = models.ForeignKey("clientandsuppliers.CamperOwner", on_delete=models.PROTECT, related_name="quotes")
     vehicle = models.ForeignKey("fleet.Camper", on_delete=models.SET_NULL, null=True, blank=True, related_name="quotes")
-    work_order = models.OneToOneField("fleet.WorkOrder", on_delete=models.SET_NULL, null=True, blank=True, related_name="source_quote")
+    work_order = models.OneToOneField("orders.WorkOrder", on_delete=models.SET_NULL, null=True, blank=True, related_name="source_quote")
     status = models.CharField(max_length=20, choices=STATUS_CHOICES, default="draft")
     description = models.TextField(blank=True, verbose_name="Richiesta / diagnosi")
     notes = models.TextField(blank=True, verbose_name="Note per il cliente")
@@ -24,7 +24,6 @@ class Quote(models.Model):
     updated_at = models.DateTimeField(auto_now=True)
 
     class Meta:
-        app_label = "fleet"
         ordering = ("-created_at",)
         constraints = [models.UniqueConstraint(fields=("workshop", "quote_number"), name="unique_quote_number_per_workshop")]
         verbose_name = "Preventivo"
@@ -55,7 +54,7 @@ class QuoteLine(models.Model):
     TYPES = [("part", "Ricambio"), ("labor", "Manodopera"), ("other", "Altro")]
     quote = models.ForeignKey(Quote, on_delete=models.CASCADE, related_name="lines")
     line_type = models.CharField(max_length=10, choices=TYPES, default="labor", verbose_name="Tipo riga")
-    part = models.ForeignKey("fleet.Part", on_delete=models.SET_NULL, null=True, blank=True, related_name="quote_lines")
+    part = models.ForeignKey("parts.Part", on_delete=models.SET_NULL, null=True, blank=True, related_name="quote_lines")
     description = models.CharField(max_length=250, verbose_name="Descrizione")
     quantity = models.DecimalField(max_digits=10, decimal_places=2, default=1)
     unit = models.CharField(max_length=30, default="pz")
@@ -64,7 +63,6 @@ class QuoteLine(models.Model):
     standard_minutes = models.PositiveIntegerField(default=0, verbose_name="Tempo standard (minuti)")
 
     class Meta:
-        app_label = "fleet"
         ordering = ("pk",)
 
     def clean(self):

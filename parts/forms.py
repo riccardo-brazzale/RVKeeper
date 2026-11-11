@@ -24,4 +24,8 @@ class PartSupplierOfferForm(forms.ModelForm):
 class PartDocumentForm(forms.ModelForm):
     class Meta:
         model = PartDocument
-        fields = ("document_type", "file", "caption")
+        fields = ("category", "file", "caption")
+
+    def __init__(self, *args, **kwargs):
+        super().__init__(*args, **kwargs)
+        self.fields["category"].queryset = self.fields["category"].queryset.filter(is_active=True)

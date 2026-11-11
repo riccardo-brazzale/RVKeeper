@@ -12,10 +12,13 @@ from xml.sax.saxutils import escape
 
 from workshops.models import Membership
 from workshops.models import Role, Workshop
-from .forms import CamperForm, WorkOrderForm
-from .models import (Attachment, AuditLog, Camper, CamperOwner, CamperPhoto, Job,
-                     JobAssignment, JobNote, Notification, Part, PartDocument, PartMovement, PartSupplierOffer, PartsRequest,
-                     TimeEvent, WarrantyClaim, WarrantyReturn, WorkOrder)
+from .forms import CamperForm, CamperPhotoForm, WorkOrderForm
+from .models import (Attachment, AuditLog, Camper, CamperPhoto, DocumentCategory, JobAssignment,
+                     JobNote, JobParticipation, Notification, PartsRequest, TimeEvent, WarrantyClaim,
+                     WarrantyReturn)
+from clientandsuppliers.models import CamperOwner
+from orders.models import Job, JobCall, PauseReason, WorkOrder
+from parts.models import Part, PartDocument, PartMovement, PartSupplierOffer
 from quotes.models import Quote, QuoteLine
 from parts.views import part_detail, part_document_upload, part_movement, part_supplier_offer
 
@@ -90,26 +93,43 @@ def camper_detail(request, pk):
     if workshop is None: return redirect("home")
     camper = get_object_or_404(Camper.objects.select_related("owner"), pk=pk, workshop=workshop)
     orders = camper.work_orders.order_by("-created_at").prefetch_related("jobs")
-    return render(request, "fleet/camper_detail.html", {"camper": camper, "orders": orders})
+    return render(request, "fleet/camper_detail.html", {"camper": camper, "orders": orders, "photos": camper.photos.select_related("category")})
+
+
+@login_required
+def camper_photo_upload(request, pk):
+    if denied := _forbidden_for_mechanic(request): return denied
+    workshop = _workshop_or_redirect(request)
+    if workshop is None: return redirect("home")
+    camper = get_object_or_404(Camper, pk=pk, workshop=workshop)
+    form = CamperPhotoForm(request.POST or None, request.FILES or None)
+    if request.method == "POST" and form.is_valid():
+        photo = form.save(commit=False)
+        photo.camper = camper
+        photo.save()
+        _audit(workshop, request.user, "photo_upload", Camper, camper)
+        messages.success(request, "Foto archiviata nella cartella del veicolo.")
+        return redirect("fleet:camper_detail", pk=camper.pk)
+    return render(request, "fleet/camper_photo_form.html", {"camper": camper, "form": form})
 
 
 MODULES = {
     "orders": (WorkOrder, "Ordini di lavoro", ("ro_number", "customer", "customer_phone", "status", "completed_at", "invoiced")),
-    "jobs": (Job, "Lavori e tecnici", ("work_order", "title", "assigned_to", "status")),
+    "jobs": (Job, "Lavori e tecnici", ("work_order", "title", "department", "status")),
     "requests": (PartsRequest, "Richieste ricambi", ("work_order", "part", "supplier_offer", "custom_item", "quantity_requested", "status")),
     "claims": (WarrantyClaim, "Garanzie", ("work_order", "component", "problem_description", "status")),
     "returns": (WarrantyReturn, "Resi in garanzia", ("work_order", "part_name", "quantity", "status")),
-    "attachments": (Attachment, "Allegati", ("work_order", "file_name", "caption", "uploaded_by", "created_at")),
+    "attachments": (Attachment, "Allegati", ("work_order", "category", "file_name", "caption", "uploaded_by", "created_at")),
     "notes": (JobNote, "Note interventi", ("job", "author", "language", "text", "created_at")),
     "assignments": (JobAssignment, "Assegnazioni tecnici", ("job", "from_technician", "to_technician", "reason", "created_at")),
 }
 FORM_EXCLUDES = {
     WorkOrder: ("workshop", "status", "created_by", "completed_at", "invoiced", "invoiced_at", "invoiced_by", "created_at", "updated_at"),
-    Job: ("workshop", "status", "active_technician", "net_minutes", "waiting_minutes", "started_at", "completed_at", "active_since", "waiting_started_at", "created_at", "updated_at"),
+    Job: ("workshop", "status", "started_at", "completed_at", "created_at", "updated_at"),
     PartsRequest: ("workshop", "requested_by", "quantity_delivered", "purchase_price", "delivered_at", "delivered_by", "inventory_applied", "created_at", "updated_at"),
     WarrantyClaim: ("workshop", "requested_by", "decided_by", "decided_at", "created_at", "updated_at"),
     WarrantyReturn: ("workshop", "requested_by", "decided_by", "decided_at", "created_at"),
-    Attachment: ("workshop", "uploaded_by", "created_at"),
+    Attachment: ("workshop", "file_name", "uploaded_by", "created_at"),
     JobNote: ("workshop", "author", "created_at"),
     JobAssignment: ("workshop", "created_at"),
 }
@@ -138,6 +158,20 @@ def _audit(workshop, user, action, model, obj, details=""):
                             entity_type=model.__name__, entity_id=str(obj.pk),
                             work_order=related_order,
                             details=details or str(obj))
+
+
+def _job_minutes(job):
+    running = {}
+    seconds = 0
+    for event in job.time_events.order_by("event_at", "pk"):
+        key = event.mechanic_id
+        if event.event_type in ("start", "resume"):
+            running[key] = event.event_at
+        elif event.event_type in ("pause", "finish", "waiting") and key in running:
+            seconds += max(0, (event.event_at - running.pop(key)).total_seconds())
+    now = timezone.now()
+    seconds += sum(max(0, (now - started).total_seconds()) for started in running.values())
+    return int(seconds // 60)
 
 
 def _assign_work_order_customer(form, order):
@@ -199,9 +233,7 @@ def workflow_list(request, module):
     if model is WarrantyClaim or model is WarrantyReturn:
         objects = objects.select_related("work_order")
     if model is Job:
-        objects = objects.select_related("work_order", "assigned_to")
-        if _is_mechanic(request.user):
-            objects = objects.filter(models.Q(assigned_to=request.user) | models.Q(active_technician=request.user)).distinct()
+        objects = objects.select_related("work_order").prefetch_related("participations__mechanic")
     if model is Attachment:
         objects = objects.select_related("work_order", "uploaded_by")
     display_rows = []
@@ -236,7 +268,7 @@ def workflow_list(request, module):
         "requests": ("Ordine", "Ricambio", "Fornitore / prezzo", "Articolo libero", "Quantità richiesta", "Stato"),
         "claims": ("Ordine", "Componente", "Descrizione problema", "Stato"),
         "returns": ("Ordine", "Ricambio", "Quantità", "Stato"),
-        "attachments": ("Ordine", "Nome file", "Descrizione", "Caricato da", "Data"),
+        "attachments": ("Ordine", "Categoria", "Nome file", "Descrizione", "Caricato da", "Data"),
         "notes": ("Lavoro", "Autore", "Lingua", "Nota", "Data"),
         "assignments": ("Lavoro", "Da", "A", "Motivo", "Data"),
     }
@@ -247,6 +279,14 @@ def workflow_list(request, module):
         column_headers = ("Numero OdL", "Cliente", "Telefono", "Stato", "Data chiusura")
     context = {"module": module, "title": title, "objects": objects, "columns": columns, "headers": column_headers, "display_rows": display_rows, "model": model,
                "status_choices": model._meta.get_field("status").choices if any(f.name == "status" for f in model._meta.fields) else ()}
+    if module == "jobs":
+        context["mechanics"] = request.user.__class__.objects.filter(memberships__workshop=workshop,
+            memberships__is_active=True, department="technician", is_active=True).distinct()
+        context["pause_reasons"] = PauseReason.objects.filter(is_active=True)
+        context["active_job_ids"] = list(JobParticipation.objects.filter(workshop=workshop, mechanic=request.user,
+            is_active=True, paused_at__isnull=True).values_list("job_id", flat=True))
+        context["paused_job_ids"] = list(JobParticipation.objects.filter(workshop=workshop, mechanic=request.user,
+            is_active=True, paused_at__isnull=False).values_list("job_id", flat=True))
     return render(request, "fleet/workflow_list.html", context)
 
 
@@ -280,11 +320,13 @@ def workflow_create(request, module):
                 if model is WorkOrder and related_model is CamperOwner:
                     field.queryset = field.queryset.filter(kind__in=("customer", "both"))
                 if _is_mechanic(request.user) and model is PartsRequest and related_model is WorkOrder:
-                    field.queryset = field.queryset.filter(jobs__assigned_to=request.user).distinct()
+                    field.queryset = field.queryset.filter(jobs__participations__mechanic=request.user, jobs__participations__is_active=True).distinct()
                 if _is_mechanic(request.user) and model is PartsRequest and related_model is Job:
-                    field.queryset = field.queryset.filter(assigned_to=request.user)
+                    field.queryset = field.queryset.filter(participations__mechanic=request.user, participations__is_active=True)
             elif related_model._meta.label == "accounts.User":
                 field.queryset = related_model.objects.filter(memberships__workshop=workshop, memberships__is_active=True, is_active=True).distinct()
+            elif related_model is DocumentCategory:
+                field.queryset = DocumentCategory.objects.filter(is_active=True)
             elif model is PartsRequest and related_model is PartSupplierOffer:
                 field.queryset = related_model.objects.filter(part__workshop=workshop).select_related("part", "supplier")
     if model is Attachment and "file" in form.fields:
@@ -320,14 +362,19 @@ def workflow_create(request, module):
             except ImportError:
                 pass
         if isinstance(obj, JobAssignment) and obj.to_technician_id:
-            obj.from_technician = Job.objects.filter(pk=obj.job_id).values_list("assigned_to_id", flat=True).first()
+            obj.from_technician = JobParticipation.objects.filter(job_id=obj.job_id, is_active=True).values_list("mechanic_id", flat=True).first()
         if isinstance(obj, Attachment):
             obj.uploaded_by = request.user
             obj.file_name = obj.file.name
+            obj.full_clean()
+            obj.full_clean()
+            obj.full_clean()
         obj.save()
         form.save_m2m()
         if isinstance(obj, JobAssignment) and obj.to_technician_id:
-            Job.objects.filter(pk=obj.job_id, workshop=workshop).update(assigned_to=obj.to_technician)
+            JobCall.objects.create(workshop=workshop, job=obj.job, mechanic=obj.to_technician, called_by=request.user)
+            Notification.objects.create(workshop=workshop, user=obj.to_technician, title="Chiamata su lavorazione",
+                body=f"{obj.job.work_order.ro_number} · {obj.job.title}", link="/lavori/miei/", work_order=obj.job.work_order)
         _audit(workshop, request.user, "create", model, obj)
         messages.success(request, f"{title}: elemento creato.")
         return redirect("fleet:workflow_list", module=module)
@@ -359,13 +406,15 @@ def workflow_edit(request, module, pk):
             if hasattr(related_model, "workshop"):
                 field.queryset = field.queryset.filter(workshop=workshop)
                 if _is_mechanic(request.user) and model is PartsRequest and related_model is WorkOrder:
-                    field.queryset = field.queryset.filter(jobs__assigned_to=request.user).distinct()
+                    field.queryset = field.queryset.filter(jobs__participations__mechanic=request.user, jobs__participations__is_active=True).distinct()
                 if _is_mechanic(request.user) and model is PartsRequest and related_model is Job:
-                    field.queryset = field.queryset.filter(assigned_to=request.user)
+                    field.queryset = field.queryset.filter(participations__mechanic=request.user, participations__is_active=True)
                 if model is WorkOrder and related_model is CamperOwner:
                     field.queryset = field.queryset.filter(kind__in=("customer", "both"))
             elif related_model._meta.label == "accounts.User":
                 field.queryset = related_model.objects.filter(memberships__workshop=workshop, memberships__is_active=True, is_active=True).distinct()
+            elif related_model is DocumentCategory:
+                field.queryset = DocumentCategory.objects.filter(is_active=True)
             elif model is PartsRequest and related_model is PartSupplierOffer:
                 field.queryset = related_model.objects.filter(part__workshop=workshop).select_related("part", "supplier")
     if request.method == "POST" and form.is_valid():
@@ -390,33 +439,108 @@ def workflow_edit(request, module, pk):
 def job_action(request, pk, action):
     workshop = _workshop_or_redirect(request)
     if workshop is None: return redirect("home")
-    job = get_object_or_404(Job, pk=pk, workshop=workshop)
-    if _is_mechanic(request.user) and job.assigned_to_id != request.user.pk and job.active_technician_id != request.user.pk:
-        return HttpResponseForbidden("Puoi aggiornare solo i lavori assegnati a te.")
-    if request.method != "POST": return redirect("fleet:workflow_list", module="jobs")
+    if request.method != "POST": return redirect("jobs")
+    job = get_object_or_404(Job.objects.select_related("work_order"), pk=pk, workshop=workshop)
     now = timezone.now()
-    if action == "start" and job.status in ("not_started", "paused", "waiting_parts", "waiting_warranty"):
-        if job.waiting_started_at:
-            job.waiting_minutes += max(0, int((now - job.waiting_started_at).total_seconds() / 60))
-            job.waiting_started_at = None
-        job.status, job.active_since, job.started_at, job.active_technician = "in_progress", now, job.started_at or now, request.user
-    elif action in ("pause", "complete") and job.status == "in_progress":
-        elapsed = max(0, int((now - job.active_since).total_seconds() / 60)) if job.active_since else 0
-        job.net_minutes += elapsed
-        job.active_since = None
-        job.status = "paused" if action == "pause" else "completed"
-        if action == "complete": job.completed_at = now
-    elif action in ("waiting_parts", "waiting_warranty") and job.status not in ("completed", "cancelled"):
-        if job.status == "in_progress" and job.active_since:
-            job.net_minutes += max(0, int((now - job.active_since).total_seconds() / 60))
-        job.status, job.block_reason, job.waiting_started_at, job.active_since = action, request.POST.get("reason", ""), now, None
-    else:
-        messages.error(request, "Azione non valida per lo stato attuale del lavoro.")
+    is_supervisor = request.user.is_staff or request.user.is_superuser or request.user.department == "admin" or request.user.seniority in ("senior", "manager")
+    participation = JobParticipation.objects.filter(job=job, mechanic=request.user, is_active=True).first()
+
+    if action == "call":
+        if _is_mechanic(request.user): return HttpResponseForbidden("Solo un responsabile può inviare una chiamata.")
+        mechanic = get_object_or_404(request.user.__class__, pk=request.POST.get("mechanic"), department="technician", memberships__workshop=workshop, memberships__is_active=True)
+        call, created = JobCall.objects.get_or_create(workshop=workshop, job=job, mechanic=mechanic, accepted_at__isnull=True, dismissed_at__isnull=True,
+            defaults={"called_by": request.user})
+        if created:
+            Notification.objects.create(workshop=workshop, user=mechanic, title="Chiamata su lavorazione", body=f"{job.work_order.ro_number} · {job.title}", link="/lavori/miei/", work_order=job.work_order)
+        messages.success(request, "Chiamata inviata al profilo del meccanico.")
+        return redirect("jobs")
+
+    if action == "accept_call":
+        call = get_object_or_404(JobCall, pk=request.POST.get("call_id"), job=job, workshop=workshop, mechanic=request.user, accepted_at__isnull=True, dismissed_at__isnull=True)
+        call.accepted_at = now
+        call.save(update_fields=("accepted_at",))
+        participation, created = JobParticipation.objects.get_or_create(workshop=workshop, job=job, mechanic=request.user, is_active=True,
+            defaults={"source": "assigned", "started_at": now})
+        event_type = "start" if created else None
+        if participation.paused_at:
+            participation.paused_at = None
+            participation.save(update_fields=("paused_at",))
+            event_type = "resume"
+        if job.status != "in_progress":
+            job.status, job.started_at = "in_progress", job.started_at or now
+            job.save(update_fields=("status", "started_at", "updated_at"))
+        if event_type:
+            TimeEvent.objects.create(workshop=workshop, job=job, mechanic=request.user, event_type=event_type, event_at=now, note="Chiamata accettata")
+        return redirect("my_jobs")
+
+    if action == "reopen":
+        if not is_supervisor: return HttpResponseForbidden("Solo un utente senior o responsabile può riaprire una lavorazione chiusa.")
+        if job.status != "completed":
+            messages.error(request, "La lavorazione non è chiusa.")
+        else:
+            job.status, job.completed_at = "in_progress", None
+            job.save(update_fields=("status", "completed_at", "updated_at"))
+            TimeEvent.objects.create(workshop=workshop, job=job, mechanic=request.user, event_type="reopen", event_at=now)
+            _audit(workshop, request.user, "reopen", Job, job)
         return redirect("fleet:workflow_list", module="jobs")
-    job.save()
-    TimeEvent.objects.create(workshop=workshop, job=job, mechanic=request.user, event_type="finish" if action == "complete" else "pause" if action == "pause" else "waiting" if action.startswith("waiting") else "start", event_at=now, note=request.POST.get("reason", ""))
+
+    if action == "start":
+        if job.status in ("completed", "cancelled"): return HttpResponseForbidden("Questa lavorazione non è aperta.")
+        participation, created = JobParticipation.objects.get_or_create(workshop=workshop, job=job, mechanic=request.user, is_active=True,
+            defaults={"source": "self", "started_at": now})
+        if not created and participation.paused_at:
+            participation.paused_at = None
+            participation.save(update_fields=("paused_at",))
+            event = "resume"
+        elif not created:
+            messages.info(request, "La tua sessione su questa lavorazione è già attiva.")
+            return redirect("my_jobs" if _is_mechanic(request.user) else "jobs")
+        else:
+            event = "start"
+        if job.status != "in_progress":
+            job.status, job.started_at = "in_progress", job.started_at or now
+            job.save(update_fields=("status", "started_at", "updated_at"))
+        TimeEvent.objects.create(workshop=workshop, job=job, mechanic=request.user, event_type=event, event_at=now)
+    elif action == "pause" and participation and not participation.paused_at:
+        reason = get_object_or_404(PauseReason, pk=request.POST.get("pause_reason"), is_active=True)
+        participation.paused_at = now
+        participation.save(update_fields=("paused_at",))
+        TimeEvent.objects.create(workshop=workshop, job=job, mechanic=request.user, event_type="pause", pause_reason=reason, event_at=now)
+        if not JobParticipation.objects.filter(job=job, is_active=True, paused_at__isnull=True).exists():
+            job.status = "paused"
+            job.save(update_fields=("status", "updated_at"))
+    elif action in ("resume",) and participation and participation.paused_at:
+        participation.paused_at = None
+        participation.save(update_fields=("paused_at",))
+        job.status = "in_progress"
+        job.save(update_fields=("status", "updated_at"))
+        TimeEvent.objects.create(workshop=workshop, job=job, mechanic=request.user, event_type="resume", event_at=now)
+    elif action == "complete" and participation:
+        participation.is_active, participation.finished_at, participation.paused_at = False, now, None
+        participation.save(update_fields=("is_active", "finished_at", "paused_at"))
+        TimeEvent.objects.create(workshop=workshop, job=job, mechanic=request.user, event_type="finish", event_at=now)
+        if not JobParticipation.objects.filter(job=job, is_active=True).exists():
+            job.status, job.completed_at = "completed", now
+            job.save(update_fields=("status", "completed_at", "updated_at"))
+        elif not JobParticipation.objects.filter(job=job, is_active=True, paused_at__isnull=True).exists():
+            job.status = "paused"
+            job.save(update_fields=("status", "updated_at"))
+    else:
+        messages.error(request, "Azione non valida per lo stato personale della lavorazione.")
     _audit(workshop, request.user, action, Job, job)
-    return redirect("fleet:workflow_list", module="jobs")
+    return redirect("my_jobs" if _is_mechanic(request.user) else "jobs")
+
+
+@login_required
+def my_jobs(request):
+    workshop = _workshop_or_redirect(request)
+    if workshop is None: return redirect("home")
+    calls = JobCall.objects.filter(workshop=workshop, mechanic=request.user, accepted_at__isnull=True,
+        dismissed_at__isnull=True).select_related("job", "job__work_order", "called_by")
+    participations = JobParticipation.objects.filter(workshop=workshop, mechanic=request.user,
+        is_active=True).select_related("job", "job__work_order")
+    return render(request, "fleet/my_jobs.html", {"calls": calls, "participations": participations,
+        "pause_reasons": PauseReason.objects.filter(is_active=True)})
 
 
 @login_required
@@ -581,10 +705,11 @@ def work_order_report(request, pk):
     job_rows = [[paragraph("Intervento", "SmallCell"), paragraph("Stato", "SmallCell"), paragraph("Ore", "RightCell"), paragraph("Importo", "RightCell")]]
     total_minutes = 0
     for job in jobs:
-        total_minutes += job.net_minutes
+        minutes = _job_minutes(job)
+        total_minutes += minutes
         job_rows.append([labelled(job.title, job.description or "", "SmallCell"),
                          paragraph(job.get_status_display(), "SmallCell"),
-                         paragraph(f"{job.net_minutes / 60:.2f}", "RightCell"),
+                         paragraph(f"{minutes / 60:.2f}", "RightCell"),
                          paragraph("Da definire", "RightCell")])
     if not jobs:
         job_rows.append([paragraph("Nessun lavoro registrato", "SmallCell"), paragraph("—", "SmallCell"), paragraph("0,00", "RightCell"), paragraph("—", "RightCell")])
@@ -655,11 +780,29 @@ def mark_notifications_read(request):
 def report(request):
     workshop = _workshop_or_redirect(request)
     if workshop is None: return redirect("home")
+    time_by_mechanic = {}
+    total_minutes = 0
+    for job in Job.objects.filter(workshop=workshop).prefetch_related("time_events__mechanic"):
+        running, seconds_by_user = {}, {}
+        for event in job.time_events.order_by("event_at", "pk"):
+            key = event.mechanic_id
+            if event.event_type in ("start", "resume"):
+                running[key] = event.event_at
+            elif event.event_type in ("pause", "finish", "waiting") and key in running:
+                seconds_by_user[key] = seconds_by_user.get(key, 0) + max(0, (event.event_at - running.pop(key)).total_seconds())
+        for key, started in running.items():
+            seconds_by_user[key] = seconds_by_user.get(key, 0) + max(0, (timezone.now() - started).total_seconds())
+        for key, seconds in seconds_by_user.items():
+            minutes = int(seconds // 60)
+            time_by_mechanic[key] = time_by_mechanic.get(key, 0) + minutes
+            total_minutes += minutes
+    users = request.user.__class__.objects.in_bulk(time_by_mechanic.keys())
+    technician_rows = [{"mechanic": users.get(key), "minutes": value} for key, value in time_by_mechanic.items()]
     return render(request, "fleet/report.html", {
         "orders": WorkOrder.objects.filter(workshop=workshop).values("status").annotate(total=Count("id")),
         "jobs": Job.objects.filter(workshop=workshop).values("status").annotate(total=Count("id")),
-        "technician_time": Job.objects.filter(workshop=workshop).values("active_technician__email").annotate(minutes=Sum("net_minutes")),
-        "total_minutes": Job.objects.filter(workshop=workshop).aggregate(total=Sum("net_minutes"))["total"] or 0,
+        "technician_time": technician_rows,
+        "total_minutes": total_minutes,
         "open_requests": PartsRequest.objects.filter(workshop=workshop).exclude(status__in=("delivered", "cancelled")).count(),
     })
 

@@ -1,0 +1,7 @@
+{% extends "base.html" %}
+{% block title %}{{ contact }} · Documenti{% endblock %}
+{% block content %}
+<div class="page-heading"><div><h2>{{ contact }}</h2><p>{{ contact.get_kind_display }} · {{ contact.phone|default:"Telefono non indicato" }} · {{ contact.email|default:"Email non indicata" }}</p></div><a class="button-link" href="{% url 'customer_edit' pk=contact.pk %}">Modifica anagrafica</a></div>
+<section class="panel"><h3>Documenti e allegati</h3>{% if documents %}<div class="table-wrap"><table><thead><tr><th>Categoria</th><th>Descrizione</th><th>File</th><th>Data</th></tr></thead><tbody>{% for document in documents %}<tr><td>{{ document.category.name }}</td><td>{{ document.caption|default:"—" }}</td><td><a href="{{ document.file.url }}" target="_blank" rel="noopener">{{ document.file.name }}</a></td><td>{{ document.created_at|date:"d/m/Y" }}</td></tr>{% endfor %}</tbody></table></div>{% else %}<p>Nessun allegato presente.</p>{% endif %}</section>
+<section class="panel" style="margin-top:18px"><h3>Carica un documento</h3><form method="post" enctype="multipart/form-data">{% csrf_token %}{% for field in form %}<div class="form-field"><label for="{{ field.id_for_label }}">{{ field.label }}</label>{{ field }}{% for error in field.errors %}<div class="form-errors">{{ error }}</div>{% endfor %}</div>{% endfor %}<button type="submit">Carica allegato</button></form></section>
+{% endblock %}

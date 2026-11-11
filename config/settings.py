@@ -23,13 +23,11 @@ load_dotenv(BASE_DIR / ".env")
 # Quick-start development settings - unsuitable for production
 # See https://docs.djangoproject.com/en/6.1/howto/deployment/checklist/
 
-# SECURITY WARNING: keep the secret key used in production secret!
-SECRET_KEY = 'django-insecure-(-fz(kerafmrkye-71l6xr+n^==)^c*vid7m$y6c-ktsbo5cvo'
-
-# SECURITY WARNING: don't run with debug turned on in production!
-DEBUG = True
-
-ALLOWED_HOSTS = ["localhost", "127.0.0.1", "192.168.3.208"]
+SECRET_KEY = os.getenv("DJANGO_SECRET_KEY", os.getenv("SECRET_KEY", "dev-only-change-before-deployment"))
+DEBUG = os.getenv("DJANGO_DEBUG", os.getenv("DEBUG", "false")).lower() in ("1", "true", "yes", "on")
+ALLOWED_HOSTS = [host.strip() for host in os.getenv(
+    "DJANGO_ALLOWED_HOSTS", os.getenv("ALLOWED_HOSTS", "localhost,127.0.0.1")
+).split(",") if host.strip()]
 
 
 # Application definition
@@ -47,6 +45,10 @@ INSTALLED_APPS = [
     'accounts',
     'workshops',
     'fleet',
+    'clientandsuppliers',
+    'orders',
+    'parts',
+    'quotes',
 ]
 
 
@@ -86,13 +88,6 @@ WSGI_APPLICATION = 'config.wsgi.application'
 
 # Database
 # https://docs.djangoproject.com/en/6.1/ref/settings/#databases
-
-# DATABASES = {
-#     'default': {
-#         'ENGINE': 'django.db.backends.sqlite3',
-#         'NAME': BASE_DIR / 'db.sqlite3',
-#     }
-# }
 
 DATABASES = {
     "default": {
@@ -157,6 +152,13 @@ EMAIL_BACKEND = os.getenv(
     "EMAIL_BACKEND",
     "django.core.mail.backends.console.EmailBackend",
 )
+EMAIL_HOST = os.getenv("EMAIL_HOST", os.getenv("SMTP_HOST", ""))
+EMAIL_PORT = int(os.getenv("EMAIL_PORT", os.getenv("SMTP_PORT", "25")))
+EMAIL_USE_TLS = os.getenv("EMAIL_USE_TLS", "false").lower() in ("1", "true", "yes", "on")
+EMAIL_USE_SSL = os.getenv("EMAIL_USE_SSL", "false").lower() in ("1", "true", "yes", "on")
+EMAIL_HOST_USER = os.getenv("EMAIL_HOST_USER", os.getenv("SMTP_USER", ""))
+EMAIL_HOST_PASSWORD = os.getenv("EMAIL_HOST_PASSWORD", os.getenv("SMTP_PASSWORD", ""))
+DEFAULT_FROM_EMAIL = os.getenv("DEFAULT_FROM_EMAIL", EMAIL_HOST_USER or "webmaster@localhost")
 
 LOGIN_URL = "login"
 LOGIN_REDIRECT_URL = "home"

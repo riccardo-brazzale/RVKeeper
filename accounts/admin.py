@@ -33,6 +33,7 @@ class CustomUserAdmin(UserAdmin):
         "first_name",
         "last_name",
         "preferred_language",
+        "seniority",
         "is_active",
         "is_staff",
     )
@@ -41,6 +42,7 @@ class CustomUserAdmin(UserAdmin):
         "is_active",
         "is_staff",
         "preferred_language",
+        "seniority",
     )
 
     search_fields = (
@@ -61,6 +63,7 @@ class CustomUserAdmin(UserAdmin):
                 "preferred_language",
                 "department",
                 "specialty",
+                "seniority",
             )
         }),
         ("Permessi", {

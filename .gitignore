@@ -11,7 +11,8 @@ __pycache__/
 # Django
 *.log
 db.sqlite3
-media/
+media/*
+!media/.gitkeep
 staticfiles/
 
 # Configurazioni e credenziali

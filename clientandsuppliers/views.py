@@ -5,8 +5,8 @@ from django.http import HttpResponseForbidden
 from django.shortcuts import get_object_or_404, redirect, render
 
 from workshops.models import Membership
-from .forms import ClientSupplierForm
-from .models import CamperOwner
+from .forms import ClientSupplierForm, ContactDocumentForm
+from .models import CamperOwner, ContactDocument
 
 
 def _active_workshop(user):
@@ -71,4 +71,24 @@ def contact_edit(request, pk):
         return redirect("customers")
     return render(request, "clientandsuppliers/contact_form.html", {
         "form": form, "title": "Modifica anagrafica", "contact": contact,
+    })
+
+
+@login_required
+def contact_detail(request, pk):
+    if not _can_manage_contacts(request.user):
+        return HttpResponseForbidden("L'anagrafica clienti e fornitori è riservata ai ruoli gestionali.")
+    workshop = _active_workshop(request.user)
+    contact = get_object_or_404(CamperOwner, pk=pk, workshop=workshop)
+    form = ContactDocumentForm(request.POST or None, request.FILES or None)
+    if request.method == "POST" and form.is_valid():
+        document = form.save(commit=False)
+        document.contact = contact
+        document.uploaded_by = request.user
+        document.full_clean()
+        document.save()
+        return redirect("customer_detail", pk=contact.pk)
+    return render(request, "clientandsuppliers/contact_detail.html", {
+        "contact": contact, "form": form,
+        "documents": contact.documents.select_related("category", "uploaded_by"),
     })
