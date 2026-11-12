@@ -22,6 +22,7 @@ Questa nota descrive il repository dopo la riprogettazione dello schema. Le migr
 
 - [[#Panoramica tecnica]]
 - [[#Avvio e configurazione]]
+- [[Deployment Linux RVKeeper]]
 - [[#Architettura del codice]]
 - [[#Funzionamento applicativo]]
 - [[#Interfaccia smartphone e desktop]]
@@ -52,7 +53,7 @@ Il progetto Ã¨ organizzato in app Django per dominio. `fleet` contiene il parc
 
 ## Avvio e configurazione
 
-Il file `manage.py` Ã¨ l'entry point dei comandi Django. Le dipendenze sono in `requirements.txt`. I settings leggono `.env` nella cartella principale del repository; partire da `.env.example` e sostituire i valori di esempio.
+Il file `manage.py` Ã¨ l'entry point dei comandi Django. Le dipendenze sono in `requirements.txt`. Le impostazioni comuni leggono `.env` dalla root del repository; `config/production_settings.py` aggiunge gli override di produzione e viene selezionato dal servizio Gunicorn. Per una nuova macchina Linux usare [[Deployment Linux RVKeeper]], che genera una configurazione locale senza sovrascrivere `.env` esistenti.
 
 Variabili attese per PostgreSQL:
 
@@ -63,9 +64,13 @@ Variabili attese per PostgreSQL:
 | `DB_PASSWORD` | Password database |
 | `DB_HOST` | Host database |
 | `DB_PORT` | Porta; fallback `5432` |
+| `DJANGO_CSRF_TRUSTED_ORIGINS` | Origini consentite per i POST; devono usare lo schema del sito |
+| `DJANGO_SECURE_COOKIES` | Cookie sessione/CSRF secure quando HTTPS è attivo |
+| `RVKEEPER_SERVER_NAME` | Host configurato da Nginx |
+| `RVKEEPER_TLS_CERTIFICATE`, `RVKEEPER_TLS_KEY` | Percorsi del certificato e della chiave TLS, se HTTPS è attivo |
 | `EMAIL_BACKEND` | Backend email; fallback al backend console Django |
 
-`DJANGO_SECRET_KEY` (fallback `SECRET_KEY`), `DJANGO_DEBUG` (fallback `DEBUG`) e `DJANGO_ALLOWED_HOSTS` (fallback `ALLOWED_HOSTS`) vengono letti dall'ambiente. `DEBUG` e falso per default. In sviluppo locale con `runserver`, impostare temporaneamente `DJANGO_DEBUG=true` nella sessione PowerShell per servire CSS e JavaScript; non attivarlo su un server pubblico. In produzione raccogliere e servire gli asset statici tramite web server o storage dedicato.
+`DJANGO_SECRET_KEY`, `DJANGO_DEBUG`, `DJANGO_ALLOWED_HOSTS` e `DJANGO_CSRF_TRUSTED_ORIGINS` vengono letti dall'ambiente. `DEBUG` e falso per default. `config/settings.py` contiene la base condivisa e i default di sviluppo; `config/production_settings.py` richiede una chiave segreta e configura cookie HTTPS, redirect e host in base alle variabili d'ambiente. In produzione raccogliere gli asset con `collectstatic` e servirli tramite Nginx.
 
 Comandi di sviluppo usuali (da eseguire nell'ambiente Python del progetto):
 
@@ -78,9 +83,7 @@ python manage.py createsuperuser
 python manage.py runserver
 ```
 
-Per un database nuovo PostgreSQL: creare prima un database vuoto, compilare le variabili `DB_*` nel `.env`, quindi eseguire `python manage.py migrate` e creare il primo superuser. Le migrazioni storiche sono state sostituite da migrazioni iniziali pulite, necessarie per creare il nuovo schema.
-
-Il file `.env` e presente. Non sovrascriverlo con `.env.example`: contiene la configurazione recuperata dal server. `.env.example` e solo un modello e `.env` resta escluso da Git.
+Per un database vuoto: creare le variabili `DB_*` nel `.env`, poi eseguire `python manage.py migrate` e `python manage.py createsuperuser`. Su Debian/Ubuntu lo script di [[Deployment Linux RVKeeper]] automatizza il provisioning locale di PostgreSQL, virtualenv, superuser, officina demo, seed, Gunicorn e Nginx. Non copiare mai `.env` o credenziali di una macchina nel repository: `.env.example` documenta i nomi delle variabili e non contiene segreti.
 
 ### Popolamento dati dimostrativi
 
@@ -92,7 +95,7 @@ Se esiste una sola officina USA attiva, il comando la seleziona automaticamente.
 python manage.py populate_demo_data --workshop <slug-officina-USA>
 ```
 
-Il comando e idempotente: usa email, codice articolo, numero interno e coppia articolo/fornitore come chiavi; crea solo i record mancanti e non elimina ne aggiorna quelli gia esistenti. Il dataset dimostrativo e stato inizialmente caricato nell'officina locale Bend.
+Il comando è idempotente: usa email, codice articolo, numero interno e coppia articolo/fornitore come chiavi; crea solo i record mancanti e non elimina né aggiorna quelli già esistenti. La macchina che esegue il seed deve avere un'officina attiva con `country=US`.
 
 ## Architettura del codice
 
@@ -373,7 +376,7 @@ Le categorie sono righe della tabella `fleet_documentcategory`, modificabili dal
 7. **Notifiche stock:** verificare la deduplicazione nel tempo e il comportamento al rientro sopra soglia; la creazione avviene mentre viene caricata la vista inventario.
 8. **Test automatici:** i file `accounts/tests.py`, `fleet/tests.py` e `workshops/tests.py` contengono attualmente solo placeholder; aggiungere copertura per tenant, permessi, conversioni, transizioni e movimenti prima di cambiamenti rilevanti.
 9. **Documentazione operativa:** nel repository Ã¨ presente `UserManual/Manuale_amministrazione_RVKeeper.docx`; confrontarlo con il comportamento corrente dopo modifiche funzionali.
-10. **Migrazioni:** le migrazioni sono state rigenerate come schema iniziale e applicate su SQLite in memoria; per PostgreSQL creare un database vuoto e applicarle con `migrate`.
+10. **Migrazioni:** le migrazioni iniziali sono la definizione versionata dello schema e vanno mantenute nel repository. Un database storico non va aggiornato alla cieca dopo la rigenerazione delle initial; lo script controlla le migrazioni pending e le colonne e si ferma in caso di divergenza.
 
 Questi sono punti di verifica ricavati dalla struttura osservata, non necessariamente difetti riprodotti in esercizio.
 
@@ -402,6 +405,11 @@ Questi sono punti di verifica ricavati dalla struttura osservata, non necessaria
 | [[../UserManual/Manuale_amministrazione_RVKeeper.docx]] | Manuale amministrativo esistente |
 | [[../requirements.txt]] | Dipendenze Python |
 | [[../.env.example]] | Template variabili ambiente |
+| [[Deployment Linux RVKeeper]] | Provisioning Debian/Ubuntu con PostgreSQL, Gunicorn e Nginx |
+| [[../scripts/provision_server.sh]] | Script idempotente di installazione Linux |
+| [[../config/production_settings.py]] | Override Django per produzione |
+| [[../fleet/management/commands/bootstrap_site.py]] | Crea officina iniziale, membership admin e seed demo |
+| [[../fleet/management/commands/check_install_state.py]] | Arresta il provisioning su database con schema incoerente |
 | [[../media/.gitkeep]] | Directory media per foto e documenti caricati |
 | [[Database PostgreSQL RVKeeper]] | Accesso psql, query e grafo Obsidian delle tabelle |
 | [[../accounts/migrations/0001_initial.py]] | Schema iniziale utente |
@@ -415,4 +423,4 @@ Questi sono punti di verifica ricavati dalla struttura osservata, non necessaria
 
 ## Nota di accuratezza
 
-Stato verificato il 2026-11-11: `.env` e presente nel workspace; il database locale `rvkeeper` risponde all'utente `rvkeeper_user`. Sono presenti 39 tabelle e tutte le migrazioni risultano applicate. `python manage.py check` non segnala problemi; `python manage.py test` trova zero test automatici. Per vedere gli asset statici con `runserver` in locale, impostare `DJANGO_DEBUG=true` solo nella sessione di sviluppo. Segui [[Database PostgreSQL RVKeeper]] per accesso psql, query e schema relazionale.
+Le configurazioni e lo stato del database sono specifici di ciascuna macchina e non sono riportati in questa nota. Segui [[Deployment Linux RVKeeper]] per il provisioning e [[Database PostgreSQL RVKeeper]] per accesso psql, query e schema relazionale.

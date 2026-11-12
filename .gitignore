@@ -14,11 +14,14 @@ db.sqlite3
 media/*
 !media/.gitkeep
 staticfiles/
+*.dump
+*.backup
 
 # Configurazioni e credenziali
 .env
 .env.*
 !.env.example
+testmail.py
 
 # IDE
 .vscode/

@@ -11,45 +11,37 @@ tags:
 
 # Database PostgreSQL RVKeeper
 
-Questa pagina documenta come collegarsi al database PostgreSQL, esplorare le tabelle e seguire le relazioni. Il modello usa PostgreSQL da `config/settings.py`; le credenziali non sono incluse nel vault o nel repository.
+Questa pagina documenta come collegarsi al database PostgreSQL, esplorare le tabelle e seguire le relazioni. Django legge la connessione da `.env` tramite `config/settings.py`; il servizio usa `config/production_settings.py`. Credenziali e database sono specifici di ogni macchina e non vanno riportati nel vault o nel repository.
 
-> [!warning] Configurazione necessaria
-> Il file `.env` recuperato dal server e presente e i nomi delle variabili sono allineati a `config/settings.py`. Contiene credenziali: non copiarne i valori in Obsidian, non stamparli nei log e non committarlo. Il test read-only verso PostgreSQL locale ha raggiunto il server, ma l autenticazione password e stata rifiutata; le credenziali del file non corrispondono all istanza locale oppure vanno aggiornate.
+> [!warning] Credenziali
+> `.env` contiene `DB_NAME`, `DB_USER`, `DB_PASSWORD`, `DB_HOST` e `DB_PORT`. Non stamparne il contenuto nei log, non copiarlo in Obsidian e non committarlo. `.env.example` è un modello senza credenziali reali.
 
-> [!danger] Attenzione al database target
-> Non eseguire `migrate`, `dropdb` o modifiche SQL finche non sono disponibili credenziali valide per il database nuovo e vuoto. Il servizio locale risponde sulla porta 5432, ma il collegamento autenticato non e riuscito.
+## Provisioning di una nuova installazione
 
+Su Debian/Ubuntu usare [[Deployment Linux RVKeeper]]. Lo script crea il ruolo/database PostgreSQL locale solo se mancanti, applica le migrazioni, crea il superuser richiesto e inizializza officina e dati demo. Non elimina mai database esistenti. In caso di schema non coerente si ferma: fare un backup e confrontare lo schema prima di ogni riparazione.
 
-## Creazione del database vuoto
+Le migrazioni versionate sono necessarie per creare un database vergine. Le migrazioni initial rigenerate per il nuovo schema non sono una conversione automatica dei vecchi database: non rimuoverle e non usare `--fake` senza aver verificato tabelle e colonne.
 
-Le migrazioni storiche sono già state sostituite da migrazioni iniziali pulite per il nuovo schema. I file `0001_initial.py`, gli eventuali `0002_initial.py`/`0003_initial.py` e il seed `fleet/0004_initial_admin_catalogs.py` fanno parte della nuova definizione: alcuni initial sono divisi per risolvere le dipendenze circolari tra app. Non cancellarli, perché `migrate` li usa per creare le tabelle.
+Comandi di manutenzione da `/opt/rvkeeper`:
 
-Dopo aver verificato il target e configurato credenziali valide:
-
-```powershell
-# Non sovrascrivere il .env esistente. Verificare DB_NAME, DB_USER, DB_HOST e DB_PORT.
-python manage.py migrate
-python manage.py createsuperuser
+```bash
+./.venv/bin/python manage.py showmigrations
+./.venv/bin/python manage.py migrate --plan
 ```
 
-Il comando `migrate` crea lo schema nel database indicato da `.env`; non crea il database PostgreSQL stesso. Un amministratore può crearlo con pgAdmin oppure, se l'utente PostgreSQL ha il privilegio `CREATEDB`:
+Per un backup PostgreSQL locale prima di un intervento:
 
-```powershell
-createdb -h 127.0.0.1 -p 5432 -U <utente> <nome_database>
+```bash
+sudo -u postgres pg_dump -Fc -d rvkeeper > /root/rvkeeper-backup.dump
+sudo chmod 600 /root/rvkeeper-backup.dump
 ```
-
-Per creare davvero un database nuovo, usare pgAdmin o `createdb` con un nome nuovo e confermato. Non eseguire `dropdb` sul target configurato dal `.env` di produzione. Dopo aver verificato che `DB_NAME` punti al database vuoto appena creato, applicare le migrazioni con `python manage.py migrate`.
 
 ## Sessione `psql`
 
-Avviare PowerShell nella root del progetto. La password viene richiesta interattivamente e non va inserita nella riga di comando:
+Sul server si può aprire una sessione amministrativa locale con:
 
-```powershell
-$env:PGHOST = "127.0.0.1"
-$env:PGPORT = "5432"
-$env:PGDATABASE = "<DB_NAME>"
-$env:PGUSER = "<DB_USER>"
-& "C:\Program Files\PostgreSQL\18\bin\psql.exe" -W
+```bash
+sudo -u postgres psql -d rvkeeper
 ```
 
 Comandi utili dentro `psql`:

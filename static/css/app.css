@@ -24,23 +24,23 @@
         position: sticky;
         top: 0;
         z-index: 30;
-        min-height: 68px;
+        min-height: 124px;
         padding: 8px 28px;
         border-bottom: 1px solid rgba(255,255,255,.1);
         box-shadow: 0 4px 18px rgba(10, 28, 49, .16);
     }
 
-    .brand img { height: 54px; }
+    .brand img { height: 108px; }
     .user-actions { gap: 18px; }
     .user-email { color: #d4e3f2; font-size: 13px; }
 
-    .app-layout { min-height: calc(100vh - 68px); }
+    .app-layout { min-height: calc(100vh - 124px); }
 
     .sidebar {
         position: sticky;
-        top: 68px;
+        top: 124px;
         align-self: flex-start;
-        height: calc(100vh - 68px);
+        height: calc(100vh - 124px);
         flex-basis: 246px;
         padding: 22px 13px;
         background: #132a43;
@@ -49,11 +49,13 @@
 
     .sidebar-label {
         margin: 20px 12px 7px;
-        color: #78dfa2;
-        font-size: 11px;
-        font-weight: 800;
+        padding-left: 8px;
+        border-left: 3px solid #55f58a;
+        color: #55f58a;
+        font-size: 12px;
+        font-weight: 900;
         letter-spacing: .12em;
-        text-shadow: 0 0 12px rgba(120, 223, 162, .12);
+        text-shadow: 0 0 10px rgba(85, 245, 138, .35);
     }
     .sidebar-label:first-child { margin-top: 0; }
     .sidebar nav { gap: 3px; }
@@ -72,7 +74,7 @@
     }
 
     .workspace {
-        min-height: calc(100vh - 68px);
+        min-height: calc(100vh - 124px);
         padding: 30px clamp(24px, 3vw, 52px) 20px;
     }
     main { max-width: 1500px; }
