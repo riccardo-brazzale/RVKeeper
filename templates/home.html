@@ -1,25 +1,26 @@
 
 {% extends "base.html" %}
 
-{% block title %}Dashboard - RVKeeper{% endblock %}
+{% load i18n %}
+{% block title %}{% translate "Dashboard" %} - RVKeeper{% endblock %}
 
 {% block content %}
 
 <h2>Dashboard</h2>
 
-<p>Benvenuto in RVKeeper.</p>
+<p>{% translate "Welcome to RVKeeper." %}</p>
 
 <div class="panel">
 
-    <h3>Gestione officina</h3>
-    <p>Seleziona una funzione dal menu laterale.</p>
+    <h3>{% translate "Workshop management" %}</h3>
+    <p>{% translate "Select a feature from the side menu." %}</p>
     <ul>
-        <li><a href="{% url 'fleet:camper_list' %}">Parco mezzi</a></li>
-        <li><a href="{% url 'orders' %}">Ordini di lavoro</a></li>
-        <li><a href="{% url 'jobs' %}">Lavori e tecnici</a></li>
-        <li><a href="{% url 'inventory' %}">Magazzino ricambi</a></li>
-        <li><a href="{% url 'parts_requests' %}">Richieste ricambi</a></li>
-        <li><a href="{% url 'warranties' %}">Garanzie</a></li>
+        <li><a href="{% url 'fleet:camper_list' %}">{% translate "Fleet" %}</a></li>
+        <li><a href="{% url 'orders' %}">{% translate "Work orders" %}</a></li>
+        <li><a href="{% url 'jobs' %}">{% translate "Jobs and technicians" %}</a></li>
+        <li><a href="{% url 'inventory' %}">{% translate "Parts catalog" %}</a></li>
+        <li><a href="{% url 'parts_requests' %}">{% translate "Parts requests" %}</a></li>
+        <li><a href="{% url 'warranties' %}">{% translate "Warranty claims" %}</a></li>
     </ul>
 
 </div>

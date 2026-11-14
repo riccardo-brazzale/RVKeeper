@@ -7,6 +7,7 @@ from django.conf.urls.static import static
 from django.urls import reverse_lazy
 
 from fleet import views as fleet_views
+from accounts import views as accounts_views
 from config import admin_ordering  # noqa: F401
 
 admin.site.site_header = "Amministrazione RVKeeper"
@@ -17,6 +18,7 @@ admin.site.index_title = "Amministrazione RVKeeper"
 urlpatterns = [
     path("i18n/", include("django.conf.urls.i18n")),
     path("", fleet_views.dashboard, name="home"),
+    path("accounts/preferences/", accounts_views.preferences, name="user_preferences"),
 
     path(
         "accounts/login/",

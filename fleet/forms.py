@@ -1,4 +1,5 @@
 from django import forms
+from django.utils.translation import gettext_lazy as _
 
 from clientandsuppliers.models import CamperOwner
 from orders.models import WorkOrder
@@ -22,35 +23,57 @@ class CamperForm(forms.ModelForm):
         self.fields["owner"].required = True
 
 
-class CustomerChoiceField(forms.ModelChoiceField):
-    def label_from_instance(self, customer):
-        label = str(customer)
-        if customer.phone:
-            label = f"{label} · {customer.phone}"
-        return label
+class CamperChoiceField(forms.ModelChoiceField):
+    def label_from_instance(self, camper):
+        return f"{camper} · {camper.owner}"
 
 
 class WorkOrderForm(forms.ModelForm):
     class Meta:
         model = WorkOrder
         exclude = (
-            "workshop", "customer_name", "customer_phone", "customer_email",
+            "workshop", "customer", "customer_name", "customer_phone", "customer_email",
             "status", "created_by", "completed_at", "invoiced", "invoiced_at",
             "invoiced_by", "created_at", "updated_at",
         )
-        labels = {"customer": "Cliente da anagrafica"}
+        labels = {"vehicle": _("Vehicle / camper")}
 
-    def __init__(self, *args, workshop, require_customer=False, **kwargs):
+    def __init__(self, *args, workshop, **kwargs):
         super().__init__(*args, **kwargs)
-        self.fields["customer"] = CustomerChoiceField(
-            queryset=CamperOwner.objects.filter(
-                workshop=workshop, kind__in=("customer", "both")
-            ),
-            required=require_customer or bool(self.instance.customer_id),
-            label="Cliente da anagrafica",
-            help_text="Nome e telefono dell’ordine vengono sincronizzati dalla scheda cliente.",
+        self.fields["vehicle"] = CamperChoiceField(
+            queryset=Camper.objects.filter(
+                workshop=workshop,
+                owner__kind__in=("customer", "both"),
+            ).select_related("owner"),
+            required=True,
+            label=_("Vehicle / camper"),
+            help_text=_("The customer is automatically taken from the selected camper."),
         )
-        self.fields["vehicle"].queryset = Camper.objects.filter(workshop=workshop)
+
+    def clean_vehicle(self):
+        vehicle = self.cleaned_data.get("vehicle")
+        if vehicle and (not vehicle.owner_id or not vehicle.owner.is_customer):
+            raise forms.ValidationError(_("Select a camper that has a registered customer as its owner."))
+        return vehicle
+
+    def clean(self):
+        cleaned_data = super().clean()
+        vehicle = cleaned_data.get("vehicle")
+        if vehicle and vehicle.owner_id:
+            self.instance.customer = vehicle.owner
+        return cleaned_data
+
+    def save(self, commit=True):
+        order = super().save(commit=False)
+        customer = self.cleaned_data["vehicle"].owner
+        order.customer = customer
+        order.customer_name = str(customer)
+        order.customer_phone = customer.phone
+        order.customer_email = customer.email
+        if commit:
+            order.save()
+            self.save_m2m()
+        return order
 
 
 class CamperPhotoForm(forms.ModelForm):

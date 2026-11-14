@@ -1,23 +1,24 @@
 
 {% extends "base.html" %}
+{% load i18n %}
 
-{% block title %}Accesso - RVKeeper{% endblock %}
+{% block title %}{% translate "Log in" %} - RVKeeper{% endblock %}
 
 {% block content %}
 
 <div class="panel login-panel">
 
     <h2 style="text-align:center; margin-top:0">
-        Benvenuto in RVKeeper
+        {% translate "Welcome to RVKeeper" %}
     </h2>
 
     <p style="text-align:center; color:#667788">
-        Accedi alla tua officina
+        {% translate "Sign in to your workshop" %}
     </p>
 
     {% if form.errors %}
         <p style="color:#c0392b">
-            Nome utente o password non corretti.
+            {% translate "Incorrect username or password." %}
         </p>
     {% endif %}
 
@@ -26,14 +27,14 @@
 
         <div class="form-field">
             <label for="{{ form.username.id_for_label }}">
-                Nome utente
+                {% translate "Username" %}
             </label>
             {{ form.username }}
         </div>
 
         <div class="form-field">
             <label for="{{ form.password.id_for_label }}">
-                Password
+                {% translate "Password" %}
             </label>
             {{ form.password }}
         </div>
@@ -41,12 +42,12 @@
         <input type="hidden" name="next" value="{{ next }}">
 
         <button type="submit" style="width:100%">
-            ACCEDI
+            {% translate "LOG IN" %}
         </button>
     </form>
 
     <p style="text-align:center; margin-bottom:0">
-        <a href="{% url 'password_reset' %}">Hai dimenticato la password?</a>
+        <a href="{% url 'password_reset' %}">{% translate "Forgot your password?" %}</a>
     </p>
 
 </div>

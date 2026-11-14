@@ -4,6 +4,7 @@ from django.db import transaction
 from django.http import HttpResponseForbidden
 from django.shortcuts import get_object_or_404, redirect, render
 from django.utils import timezone
+from django.utils.translation import gettext_lazy as _
 
 from clientandsuppliers.models import CamperOwner
 from fleet.models import AuditLog, Camper, PartsRequest
@@ -36,7 +37,7 @@ def _quote_number(workshop):
 @login_required
 def quote_list(request):
     if _denied(request.user):
-        return HttpResponseForbidden("I preventivi sono riservati ai ruoli gestionali.")
+        return HttpResponseForbidden(_("Quotes are restricted to management roles."))
     workshop = _workshop(request.user)
     quotes = Quote.objects.filter(workshop=workshop).select_related("customer", "vehicle", "work_order") if workshop else Quote.objects.none()
     return render(request, "quotes/quote_list.html", {"quotes": quotes, "has_workshop": workshop is not None})
@@ -45,10 +46,10 @@ def quote_list(request):
 @login_required
 def quote_create(request):
     if _denied(request.user):
-        return HttpResponseForbidden("I preventivi sono riservati ai ruoli gestionali.")
+        return HttpResponseForbidden(_("Quotes are restricted to management roles."))
     workshop = _workshop(request.user)
     if workshop is None:
-        messages.error(request, "Il tuo account non è associato a un'officina attiva.")
+        messages.error(request, _("Your account is not associated with an active workshop."))
         return redirect("quotes")
     form = QuoteForm(request.POST or None, workshop=workshop)
     quote = form.save(commit=False) if request.method == "POST" and form.is_valid() else Quote(workshop=workshop)
@@ -71,15 +72,15 @@ def quote_create(request):
                     line.unit = line.part.unit
                 line.quote = quote
                 line.save()
-            messages.success(request, f"Preventivo {quote.quote_number} creato.")
+            messages.success(request, _("Quote %(number)s created.") % {"number": quote.quote_number})
         return redirect("quote_detail", pk=quote.pk)
-    return render(request, "quotes/quote_form.html", {"form": form, "line_formset": line_formset, "title": "Nuovo preventivo"})
+    return render(request, "quotes/quote_form.html", {"form": form, "line_formset": line_formset, "title": _("New quote")})
 
 
 @login_required
 def quote_edit(request, pk):
     if _denied(request.user):
-        return HttpResponseForbidden("I preventivi sono riservati ai ruoli gestionali.")
+        return HttpResponseForbidden(_("Quotes are restricted to management roles."))
     workshop = _workshop(request.user)
     if workshop is None:
         return redirect("home")
@@ -104,15 +105,15 @@ def quote_edit(request, pk):
             line.save()
         for line in line_formset.deleted_objects:
             line.delete()
-        messages.success(request, "Preventivo aggiornato.")
+        messages.success(request, _("Quote updated."))
         return redirect("quote_detail", pk=quote.pk)
-    return render(request, "quotes/quote_form.html", {"form": form, "line_formset": line_formset, "title": f"Modifica {quote.quote_number}", "quote": quote})
+    return render(request, "quotes/quote_form.html", {"form": form, "line_formset": line_formset, "title": _("Edit quote %(number)s") % {"number": quote.quote_number}, "quote": quote})
 
 
 @login_required
 def quote_detail(request, pk):
     if _denied(request.user):
-        return HttpResponseForbidden("I preventivi sono riservati ai ruoli gestionali.")
+        return HttpResponseForbidden(_("Quotes are restricted to management roles."))
     workshop = _workshop(request.user)
     if workshop is None:
         return redirect("home")
@@ -127,7 +128,7 @@ def quote_detail(request, pk):
 @login_required
 def quote_status(request, pk):
     if _denied(request.user):
-        return HttpResponseForbidden("I preventivi sono riservati ai ruoli gestionali.")
+        return HttpResponseForbidden(_("Quotes are restricted to management roles."))
     workshop = _workshop(request.user)
     if workshop is None:
         return redirect("home")
@@ -135,22 +136,22 @@ def quote_status(request, pk):
     allowed = {value for value, _ in Quote.STATUS_CHOICES}
     new_status = request.POST.get("status") if request.method == "POST" else None
     if new_status not in allowed:
-        messages.error(request, "Stato preventivo non valido.")
+        messages.error(request, _("Invalid quote status."))
     elif new_status == "approved" and quote.status not in ("draft", "sent"):
-        messages.error(request, "È possibile accettare solo un preventivo in bozza o già inviato.")
+        messages.error(request, _("Only draft or sent quotes can be approved."))
     else:
         quote.status = new_status
         quote.save(update_fields=("status", "updated_at"))
         AuditLog.objects.create(workshop=workshop, actor=request.user, action="status", entity_type="Quote",
                                 entity_id=str(quote.pk), details=new_status)
-        messages.success(request, "Stato del preventivo aggiornato.")
+        messages.success(request, _("Quote status updated."))
     return redirect("quote_detail", pk=quote.pk)
 
 
 @login_required
 def quote_to_order(request, pk):
     if _denied(request.user):
-        return HttpResponseForbidden("La conversione in OdL è riservata ai ruoli gestionali.")
+        return HttpResponseForbidden(_("Converting quotes to work orders is restricted to management roles."))
     workshop = _workshop(request.user)
     if workshop is None:
         return redirect("home")
@@ -158,21 +159,28 @@ def quote_to_order(request, pk):
         return redirect("quote_detail", pk=pk)
     with transaction.atomic():
         Workshop.objects.select_for_update().get(pk=workshop.pk)
-        quote = get_object_or_404(Quote.objects.select_for_update().select_related("customer", "vehicle"), pk=pk, workshop=workshop)
+        quote = get_object_or_404(Quote.objects.select_for_update().select_related("customer", "vehicle__owner"), pk=pk, workshop=workshop)
         if quote.status != "approved" or quote.work_order_id:
-            messages.error(request, "Solo un preventivo accettato e non ancora convertito può generare un OdL.")
+            messages.error(request, _("Only an approved quote that has not already been converted can create a work order."))
+            return redirect("quote_detail", pk=quote.pk)
+        vehicle = quote.vehicle
+        if not vehicle or not vehicle.owner_id or not vehicle.owner.is_customer:
+            messages.error(request, _("Assign a camper with a customer to this quote before converting it."))
+            return redirect("quote_detail", pk=quote.pk)
+        customer = vehicle.owner
+        if vehicle.workshop_id != workshop.pk or customer.pk != quote.customer_id:
+            messages.error(request, _("The quote customer must be the selected camper's owner."))
             return redirect("quote_detail", pk=quote.pk)
         sequence = WorkOrder.objects.filter(workshop=workshop).count() + 1
         ro_number = f"RO-{timezone.localdate().year}-{sequence:04d}"
         while WorkOrder.objects.filter(workshop=workshop, ro_number=ro_number).exists():
             sequence += 1
             ro_number = f"RO-{timezone.localdate().year}-{sequence:04d}"
-        vehicle = quote.vehicle
         order = WorkOrder.objects.create(
-            workshop=workshop, customer=quote.customer, vehicle=vehicle, ro_number=ro_number,
-            make=vehicle.brand if vehicle else "", model=vehicle.model if vehicle else "",
-            customer_name=str(quote.customer), customer_phone=quote.customer.phone,
-            customer_email=quote.customer.email, odometer=vehicle.mileage if vehicle else None,
+            workshop=workshop, customer=customer, vehicle=vehicle, ro_number=ro_number,
+            make=vehicle.brand, model=vehicle.model,
+            customer_name=str(customer), customer_phone=customer.phone,
+            customer_email=customer.email, odometer=vehicle.mileage,
             reception_notes=quote.description, created_by=request.user,
         )
         job_number = 0
@@ -196,5 +204,5 @@ def quote_to_order(request, pk):
         AuditLog.objects.create(workshop=workshop, actor=request.user, action="create_from_quote",
             entity_type="WorkOrder", entity_id=str(order.pk), work_order=order,
             details=f"Creato da preventivo {quote.quote_number}")
-    messages.success(request, f"Preventivo convertito nell'ordine di lavoro {order.ro_number}.")
+    messages.success(request, _("Quote converted to work order %(number)s.") % {"number": order.ro_number})
     return redirect("orders")

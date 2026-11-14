@@ -1,3 +1,4 @@
 {% extends "base.html" %}
-{% block title %}Aggiungi foto · {{ camper.plate|default:camper.internal_number }}{% endblock %}
-{% block content %}<h2>Documentazione fotografica veicolo</h2><p>{{ camper.plate|default:camper.internal_number }} · {{ camper.brand }} {{ camper.model }}</p><section class="panel"><form method="post" enctype="multipart/form-data">{% csrf_token %}{% for field in form %}<div class="form-field"><label for="{{ field.id_for_label }}">{{ field.label }}</label>{{ field }}{% for error in field.errors %}<div class="form-errors">{{ error }}</div>{% endfor %}</div>{% endfor %}<button type="submit">Carica foto</button></form></section>{% endblock %}
+{% load i18n %}
+{% block title %}{% translate "Add photo" %} · {{ camper.plate|default:camper.internal_number }}{% endblock %}
+{% block content %}<h2>{% translate "Vehicle photo documentation" %}</h2><p>{{ camper.plate|default:camper.internal_number }} · {{ camper.brand }} {{ camper.model }}</p><section class="panel"><form method="post" enctype="multipart/form-data">{% csrf_token %}{% for field in form %}<div class="form-field"><label for="{{ field.id_for_label }}">{{ field.label }}</label>{{ field }}{% for error in field.errors %}<div class="form-errors">{{ error }}</div>{% endfor %}</div>{% endfor %}<button type="submit">{% translate "Upload photo" %}</button></form></section>{% endblock %}

@@ -1,0 +1,19 @@
+{% extends "base.html" %}
+{% load i18n %}
+
+{% block title %}{% translate "User settings" %} - RVKeeper{% endblock %}
+
+{% block content %}
+<h2>{% translate "User settings" %}</h2>
+<div class="panel">
+    <form method="post">
+        {% csrf_token %}
+        <div class="form-field">
+            <label for="{{ form.preferred_language.id_for_label }}">{% translate "Interface language" %}</label>
+            {{ form.preferred_language }}
+            {% for error in form.preferred_language.errors %}<div class="form-errors">{{ error }}</div>{% endfor %}
+        </div>
+        <button type="submit">{% translate "Save" %}</button>
+    </form>
+</div>
+{% endblock %}

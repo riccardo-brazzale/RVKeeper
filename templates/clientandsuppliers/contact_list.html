@@ -1,25 +1,26 @@
 {% extends "base.html" %}
-{% block title %}Clienti e fornitori · RVKeeper{% endblock %}
+{% load i18n %}
+{% block title %}{% translate "Customers and suppliers" %} · RVKeeper{% endblock %}
 {% block content %}
 <div class="page-heading">
     <div>
-        <h2>Clienti e fornitori</h2>
-        <p>Un’unica anagrafica per proprietari dei veicoli e fornitori dei ricambi.</p>
+        <h2>{% translate "Customers and suppliers" %}</h2>
+        <p>{% translate "One contact directory for vehicle owners and parts suppliers." %}</p>
     </div>
-    <a class="button-link" href="{% url 'customer_create' %}">Nuova anagrafica</a>
+    <a class="button-link" href="{% url 'customer_create' %}">{% translate "New contact" %}</a>
 </div>
 
 {% if has_workshop %}
 <section class="panel">
     <form method="get" class="actions" style="margin-bottom:18px">
-        <input type="search" name="q" value="{{ query }}" placeholder="Nome, ragione sociale, telefono…" aria-label="Cerca contatto">
-        <select name="tipo" aria-label="Filtra per tipo">
-            <option value="">Tutti</option>
-            <option value="customer" {% if kind == 'customer' %}selected{% endif %}>Clienti</option>
-            <option value="supplier" {% if kind == 'supplier' %}selected{% endif %}>Fornitori</option>
-            <option value="both" {% if kind == 'both' %}selected{% endif %}>Entrambi</option>
+        <input type="search" name="q" value="{{ query }}" placeholder="{% translate 'Name, company, phone…' %}" aria-label="{% translate 'Search contacts' %}">
+        <select name="tipo" aria-label="{% translate 'Filter by type' %}">
+            <option value="">{% translate "All" %}</option>
+            <option value="customer" {% if kind == 'customer' %}selected{% endif %}>{% translate "Customers" %}</option>
+            <option value="supplier" {% if kind == 'supplier' %}selected{% endif %}>{% translate "Suppliers" %}</option>
+            <option value="both" {% if kind == 'both' %}selected{% endif %}>{% translate "Both" %}</option>
         </select>
-        <button type="submit">Filtra</button>
+        <button type="submit">{% translate "Filter" %}</button>
     </form>
 
     {% if contacts %}
@@ -27,8 +28,8 @@
         <table>
             <thead>
                 <tr>
-                    <th>Tipo</th><th>Contatto</th><th>Telefono</th><th>Email</th>
-                    <th>Partita IVA</th><th>Città</th><th></th>
+                    <th>{% translate "Type" %}</th><th>{% translate "Contact" %}</th><th>{% translate "Phone" %}</th><th>{% translate "Email" %}</th>
+                    <th>{% translate "VAT number" %}</th><th>{% translate "City" %}</th><th></th>
                 </tr>
             </thead>
             <tbody>
@@ -41,8 +42,8 @@
                     <td>{{ contact.vat_number|default:"—" }}</td>
                     <td>{{ contact.city|default:"—" }}</td>
                     <td>
-                        <a href="{% url 'customer_detail' pk=contact.pk %}">Documenti</a> ·
-                        <a href="{% url 'customer_edit' pk=contact.pk %}">Modifica</a>
+                        <a href="{% url 'customer_detail' pk=contact.pk %}">{% translate "Documents" %}</a> ·
+                        <a href="{% url 'customer_edit' pk=contact.pk %}">{% translate "Edit" %}</a>
                     </td>
                 </tr>
                 {% endfor %}
@@ -50,12 +51,12 @@
         </table>
     </div>
     {% else %}
-    <p>Nessun contatto corrisponde ai criteri. Usa “Nuova anagrafica” per aggiungerne uno.</p>
+    <p>{% translate "No contacts match your search. Use “New contact” to add one." %}</p>
     {% endif %}
 </section>
 {% else %}
 <section class="panel">
-    <p>Il tuo account non è associato a un’officina attiva.</p>
+    <p>{% translate "Your account is not associated with an active workshop." %}</p>
 </section>
 {% endif %}
 {% endblock %}

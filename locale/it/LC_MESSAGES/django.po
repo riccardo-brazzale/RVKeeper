@@ -1,0 +1,1010 @@
+msgid ""
+msgstr ""
+"Content-Type: text/plain; charset=UTF-8\n"
+"Language: it\n"
+"Language-Team: RVKeeper\n"
+"MIME-Version: 1.0\n"
+"PO-Revision-Date: 2026-11-14 11:00+0100\n"
+"Project-Id-Version: RVKeeper\n"
+"Last-Translator: RVKeeper contributors\n"
+"Content-Transfer-Encoding: 8bit\n"
+"Plural-Forms: nplurals=2; plural=(n != 1);\n"
+
+msgid "Settings"
+msgstr "Impostazioni"
+
+msgid "User settings"
+msgstr "Impostazioni utente"
+
+msgid "Interface language"
+msgstr "Lingua dell'interfaccia"
+
+msgid "Save"
+msgstr "Salva"
+
+msgid "Language preference updated."
+msgstr "Preferenza della lingua aggiornata."
+
+msgid "Open menu"
+msgstr "Apri menu"
+
+msgid "Menu"
+msgstr "Menu"
+
+msgid "RVKeeper, home"
+msgstr "RVKeeper, pagina iniziale"
+
+msgid "Log out"
+msgstr "Esci"
+
+msgid "Main navigation"
+msgstr "Navigazione principale"
+
+msgid "Overview"
+msgstr "Panoramica"
+
+msgid "Dashboard"
+msgstr "Dashboard"
+
+msgid "Contacts"
+msgstr "Anagrafiche"
+
+msgid "Customers and suppliers"
+msgstr "Clienti e fornitori"
+
+msgid "Fleet"
+msgstr "Parco mezzi"
+
+msgid "Workshop"
+msgstr "Officina"
+
+msgid "My jobs"
+msgstr "Le mie lavorazioni"
+
+msgid "Work orders"
+msgstr "Ordini di lavoro"
+
+msgid "Quotes"
+msgstr "Preventivi"
+
+msgid "Progress"
+msgstr "Avanzamenti"
+
+msgid "Jobs and technicians"
+msgstr "Lavori e tecnici"
+
+msgid "Parts"
+msgstr "Ricambi"
+
+msgid "Parts catalog"
+msgstr "Magazzino e listino"
+
+msgid "Parts inventory and catalog"
+msgstr "Magazzino e catalogo ricambi"
+
+msgid "Parts requests"
+msgstr "Richieste ricambi"
+
+msgid "Warranties"
+msgstr "Garanzie"
+
+msgid "Warranty claims"
+msgstr "Pratiche di garanzia"
+
+msgid "Warranty returns"
+msgstr "Resi in garanzia"
+
+msgid "Records and reports"
+msgstr "Archivio e report"
+
+msgid "Job notes"
+msgstr "Note interventi"
+
+msgid "Technician assignments"
+msgstr "Assegnazioni tecnici"
+
+msgid "Attachments"
+msgstr "Allegati"
+
+msgid "Reports"
+msgstr "Report"
+
+msgid "Notifications"
+msgstr "Notifiche"
+
+msgid "Activity log"
+msgstr "Registro attività"
+
+msgid "Export backup"
+msgstr "Esporta backup"
+
+msgid "Close menu"
+msgstr "Chiudi menu"
+
+msgid "Camper Maintenance Management"
+msgstr "Gestione manutenzione camper"
+
+msgid "Welcome to RVKeeper."
+msgstr "Benvenuto in RVKeeper."
+
+msgid "Workshop management"
+msgstr "Gestione officina"
+
+msgid "Select a feature from the side menu."
+msgstr "Seleziona una funzione dal menu laterale."
+
+msgid "Log in"
+msgstr "Accesso"
+
+msgid "Welcome to RVKeeper"
+msgstr "Benvenuto in RVKeeper"
+
+msgid "Sign in to your workshop"
+msgstr "Accedi alla tua officina"
+
+msgid "Incorrect username or password."
+msgstr "Nome utente o password non corretti."
+
+msgid "Username"
+msgstr "Nome utente"
+
+msgid "Password"
+msgstr "Password"
+
+msgid "LOG IN"
+msgstr "ACCEDI"
+
+msgid "Forgot your password?"
+msgstr "Hai dimenticato la password?"
+
+msgid "Accept and start timer"
+msgstr "Accetta e avvia il tempo"
+
+msgid "Action"
+msgstr "Azione"
+
+msgid "Actions"
+msgstr "Azioni"
+
+msgid "Active jobs"
+msgstr "Lavori attivi"
+
+msgid "Add attachment"
+msgstr "Aggiungi allegato"
+
+msgid "Add camper"
+msgstr "Aggiungi camper"
+
+msgid "Add parts, labor or other items. Price and discount apply to each line."
+msgstr "Aggiungi ricambi, manodopera o altre voci. Prezzo e sconto si applicano a ciascuna riga."
+
+msgid "Add photo"
+msgstr "Aggiungi foto"
+
+msgid "Add supplier"
+msgstr "Aggiungi fornitore"
+
+msgid "Add vehicle"
+msgstr "Aggiungi veicolo"
+
+msgid "Adjustment"
+msgstr "Rettifica"
+
+msgid "All"
+msgstr "Tutti"
+
+msgid "All jobs"
+msgstr "Tutte le lavorazioni"
+
+msgid "All quotes"
+msgstr "Tutti i preventivi"
+
+msgid "Attach a photo or document"
+msgstr "Allega una foto o un documento"
+
+msgid "Attach documentation"
+msgstr "Allega documentazione"
+
+msgid "available"
+msgstr "disponibile"
+
+msgid "Available"
+msgstr "Disponibile"
+
+msgid "Back to fleet"
+msgstr "Torna al parco mezzi"
+
+msgid "Back to inventory"
+msgstr "Torna al magazzino"
+
+msgid "Back to sign in"
+msgstr "Torna all'accesso"
+
+msgid "Both"
+msgstr "Entrambi"
+
+msgid "Call"
+msgstr "Chiama"
+
+msgid "Cancel"
+msgstr "Annulla"
+
+msgid "Category"
+msgstr "Categoria"
+
+msgid "Check your email"
+msgstr "Controlla la tua email"
+
+msgid "City"
+msgstr "Città"
+
+msgid "Clear"
+msgstr "Azzera"
+
+msgid "Code"
+msgstr "Codice"
+
+msgid "Contact"
+msgstr "Contatto"
+
+msgid "Converted to work order"
+msgstr "Convertito nell'ordine di lavoro"
+
+msgid "Convert the quote to a work order and create its jobs and parts requests."
+msgstr "Converti il preventivo in un ordine di lavoro e crea gli interventi e le richieste ricambi."
+
+msgid "Cost"
+msgstr "Costo"
+
+msgid "Create work order"
+msgstr "Crea ordine di lavoro"
+
+msgid "Customer"
+msgstr "Cliente"
+
+msgid "Customers"
+msgstr "Clienti"
+
+msgid "Date"
+msgstr "Data"
+
+msgid "days"
+msgstr "giorni"
+
+msgid "Delivery"
+msgstr "Consegna"
+
+msgid "Description"
+msgstr "Descrizione"
+
+msgid "Details"
+msgstr "Scheda"
+
+msgid "Discount"
+msgstr "Sconto"
+
+msgid "Documentation"
+msgstr "Documentazione"
+
+msgid "Documents"
+msgstr "Documenti"
+
+msgid "Documents and attachments"
+msgstr "Documenti e allegati"
+
+msgid "Edit"
+msgstr "Modifica"
+
+msgid "Edit contact"
+msgstr "Modifica anagrafica"
+
+msgid "Edit supplier offer"
+msgstr "Modifica condizione fornitore"
+
+msgid "Edit vehicle"
+msgstr "Modifica veicolo"
+
+msgid "Email"
+msgstr "Email"
+
+msgid "Engine"
+msgstr "Motorizzazione"
+
+msgid "Enter the email address associated with your account. We will send instructions to set a new password."
+msgstr "Inserisci l'indirizzo email associato al tuo account. Ti invieremo le istruzioni per impostare una nuova password."
+
+msgid "Features / notes"
+msgstr "Dotazioni / note"
+
+msgid "File"
+msgstr "File"
+
+msgid "Filter"
+msgstr "Filtra"
+
+msgid "For an adjustment, enter the actual stock after counting."
+msgstr "Per una rettifica inserisci la giacenza effettiva dopo il conteggio."
+
+msgid "If the address you entered matches an active account, you will receive instructions to reset your password."
+msgstr "Se l'indirizzo inserito corrisponde a un account attivo, riceverai le istruzioni per reimpostare la password."
+
+msgid "Incoming calls"
+msgstr "Chiamate ricevute"
+
+msgid "Incoming calls and your personal time. You can work with other technicians on the same job."
+msgstr "Chiamate ricevute e tempi personali. Puoi lavorare insieme ad altri meccanici sullo stesso intervento."
+
+msgid "Internal number"
+msgstr "Numero interno"
+
+msgid "Invalid link"
+msgstr "Link non valido"
+
+msgid "Inventory movement"
+msgstr "Movimento magazzino"
+
+msgid "Item"
+msgstr "Elemento"
+
+msgid "Job"
+msgstr "Intervento"
+
+msgid "Jobs"
+msgstr "Lavori"
+
+msgid "Jobs by status"
+msgstr "Lavori per stato"
+
+msgid "Line"
+msgstr "Voce"
+
+msgid "List price"
+msgstr "Prezzo listino"
+
+msgid "Location"
+msgstr "Ubicazione"
+
+msgid "Low-stock parts"
+msgstr "Ricambi sotto scorta"
+
+msgid "Manage data for the active workshop."
+msgstr "Gestione dati dell'officina attiva."
+
+msgid "Mark all as read"
+msgstr "Segna tutte come lette"
+
+msgid "Mark this report as invoiced? If you choose Cancel, the PDF will open without changing the status."
+msgstr "Vuoi contrassegnare il rapportino come fatturato? Se scegli Annulla, il PDF si aprirà senza modificare lo stato."
+
+msgid "Mileage"
+msgstr "Chilometraggio"
+
+msgid "Minimum"
+msgstr "Minimo"
+
+msgid "Minimum quantity"
+msgstr "Quantità minima"
+
+msgid "Minimum stock"
+msgstr "Scorta minima"
+
+msgid "minutes"
+msgstr "minuti"
+
+msgid "Movement"
+msgstr "Movimento"
+
+msgid "Name, company, phone…"
+msgstr "Nome, ragione sociale, telefono…"
+
+msgid "Net price"
+msgstr "Prezzo netto"
+
+msgid "New"
+msgstr "Nuovo"
+
+msgid "New contact"
+msgstr "Nuova anagrafica"
+
+msgid "New item"
+msgstr "Nuovo elemento"
+
+msgid "New part"
+msgstr "Nuovo articolo"
+
+msgid "New password"
+msgstr "Nuova password"
+
+msgid "New quote"
+msgstr "Nuovo preventivo"
+
+msgid "No active jobs."
+msgstr "Nessun lavoro attivo."
+
+msgid "No activity has been recorded."
+msgstr "Nessuna attività registrata."
+
+msgid "No attachments are available."
+msgstr "Nessun allegato disponibile."
+
+msgid "No attachments have been added."
+msgstr "Nessun allegato presente."
+
+msgid "No campers are registered. Use “Add camper” to add the first one."
+msgstr "Nessun camper registrato. Usa “Aggiungi camper” per inserire il primo."
+
+msgid "No contacts match your search. Use “New contact” to add one."
+msgstr "Nessun contatto corrisponde ai criteri. Usa “Nuova anagrafica” per aggiungerne uno."
+
+msgid "No data available."
+msgstr "Nessun dato disponibile."
+
+msgid "No documents or photos are attached."
+msgstr "Nessun documento o foto allegati."
+
+msgid "No inventory movements have been recorded."
+msgstr "Nessun movimento registrato."
+
+msgid "No items have been recorded. Use “New” to add the first one."
+msgstr "Nessun elemento registrato. Usa “Nuovo” per aggiungere il primo."
+
+msgid "No notifications."
+msgstr "Nessuna notifica."
+
+msgid "No parts found."
+msgstr "Nessun articolo trovato."
+
+msgid "No pending calls."
+msgstr "Nessuna chiamata in sospeso."
+
+msgid "No photos have been archived."
+msgstr "Nessuna foto archiviata."
+
+msgid "No quotes yet. Create a quote for a customer to start the approval process."
+msgstr "Nessun preventivo. Crea un'offerta per un cliente per avviare il flusso di approvazione."
+
+msgid "No suppliers are associated with this part. Add an offer to compare purchase prices."
+msgstr "Nessun fornitore associato. Aggiungi un'offerta per confrontare i prezzi d'acquisto."
+
+msgid "No work orders have been added."
+msgstr "Nessun ordine inserito."
+
+msgid "No work orders have been recorded for this vehicle."
+msgstr "Nessun ordine registrato per questo veicolo."
+
+msgid "Note"
+msgstr "Nota"
+
+msgid "Notes:"
+msgstr "Note:"
+
+msgid "Number"
+msgstr "Numero"
+
+msgid "One contact directory for vehicle owners and parts suppliers."
+msgstr "Un'unica anagrafica per proprietari dei veicoli e fornitori dei ricambi."
+
+msgid "Open parts requests"
+msgstr "Richieste ricambi aperte"
+
+msgid "Open work orders"
+msgstr "Ordini aperti"
+
+msgid "Operator"
+msgstr "Operatore"
+
+msgid "Owner"
+msgstr "Proprietario"
+
+msgid "Part"
+msgstr "Articolo"
+
+msgid "Parts catalog, availability and procurement."
+msgstr "Catalogo articoli, disponibilità e approvvigionamento."
+
+msgid "Password reset"
+msgstr "Recupero password"
+
+msgid "Password updated"
+msgstr "Password aggiornata"
+
+msgid "Pause"
+msgstr "Pausa"
+
+msgid "Pause reason"
+msgstr "Causale pausa"
+
+msgid "Personal sessions"
+msgstr "Sessioni personali"
+
+msgid "Phone"
+msgstr "Telefono"
+
+msgid "Phone not provided"
+msgstr "Telefono non indicato"
+
+msgid "Plate"
+msgstr "Targa"
+
+msgid "Preferred"
+msgstr "Preferito"
+
+msgid "Quantity"
+msgstr "Quantità"
+
+msgid "Quote"
+msgstr "Preventivo"
+
+msgid "Quote approved"
+msgstr "Preventivo accettato"
+
+msgid "Quote lines"
+msgstr "Righe del preventivo"
+
+msgid "Quote total"
+msgstr "Totale preventivo"
+
+msgid "Quotes for service, parts and labor before opening a work order."
+msgstr "Offerte per interventi, ricambi e manodopera prima dell'apertura dell'OdL."
+
+msgid "Recent movements"
+msgstr "Ultimi movimenti"
+
+msgid "Recent work orders"
+msgstr "Ordini recenti"
+
+msgid "Record delivery"
+msgstr "Registra consegna"
+
+msgid "Recorded work minutes"
+msgstr "Minuti lavorati registrati"
+
+msgid "Record movement"
+msgstr "Registra movimento"
+
+msgid "Reference cost"
+msgstr "Costo di riferimento"
+
+msgid "Reopen"
+msgstr "Riapri"
+
+msgid "Reopen PDF report"
+msgstr "Riapri prospetto PDF"
+
+msgid "Request / diagnosis:"
+msgstr "Richiesta / diagnosi:"
+
+msgid "Requested by"
+msgstr "Richiesta da"
+
+msgid "Request a new link"
+msgstr "Richiedi un nuovo link"
+
+msgid "Reset your password"
+msgstr "Recupera la password"
+
+msgid "Resume"
+msgstr "Riprendi"
+
+msgid "Resume timer"
+msgstr "Riprendi tempo"
+
+msgid "RO"
+msgstr "RO"
+
+msgid "Sale price"
+msgstr "Prezzo vendita"
+
+msgid "Save contact"
+msgstr "Salva anagrafica"
+
+msgid "Save new password"
+msgstr "Salva nuova password"
+
+msgid "Save part"
+msgstr "Salva articolo"
+
+msgid "Save quote"
+msgstr "Salva preventivo"
+
+msgid "Save status"
+msgstr "Salva stato"
+
+msgid "Save supplier"
+msgstr "Salva fornitore"
+
+msgid "Save vehicle"
+msgstr "Salva veicolo"
+
+msgid "Search"
+msgstr "Cerca"
+
+msgid "Search contacts"
+msgstr "Cerca contatto"
+
+msgid "Search parts"
+msgstr "Cerca ricambio"
+
+msgid "Search vehicles"
+msgstr "Cerca veicolo"
+
+msgid "Select the correct administrative category for this attachment."
+msgstr "Seleziona la categoria amministrativa corretta per questo allegato."
+
+msgid "Send instructions"
+msgstr "Invia istruzioni"
+
+msgid "Service history"
+msgstr "Storico interventi"
+
+msgid "Set a new password"
+msgstr "Imposta una nuova password"
+
+msgid "Standard time"
+msgstr "Tempo standard"
+
+msgid "Started"
+msgstr "Iniziata"
+
+msgid "Start / join"
+msgstr "Inizia / unisciti"
+
+msgid "Status"
+msgstr "Stato"
+
+msgid "Stock"
+msgstr "Giacenza"
+
+msgid "Stock in"
+msgstr "Carico"
+
+msgid "Stock out"
+msgstr "Scarico"
+
+msgid "Stop my timer"
+msgstr "Termina il mio tempo"
+
+msgid "Supplier"
+msgstr "Fornitore"
+
+msgid "Supplier code"
+msgstr "Codice fornitore"
+
+msgid "Suppliers"
+msgstr "Fornitori"
+
+msgid "Suppliers and purchase prices"
+msgstr "Fornitori e prezzi d'acquisto"
+
+msgid "Technical sheets and photos"
+msgstr "Schede tecniche e foto"
+
+msgid "Technician"
+msgstr "Tecnico"
+
+msgid "The reset link has expired or has already been used. You can request new instructions."
+msgstr "Il link di recupero è scaduto o è già stato usato. Puoi richiedere nuove istruzioni."
+
+msgid "Time recorded by technician"
+msgstr "Tempo registrato per tecnico"
+
+msgid "Total"
+msgstr "Totale"
+
+msgid "Type"
+msgstr "Tipo"
+
+msgid "Unit price"
+msgstr "Prezzo unitario"
+
+msgid "Update"
+msgstr "Aggiorna"
+
+msgid "Update status"
+msgstr "Aggiorna stato"
+
+msgid "Upload a document"
+msgstr "Carica un documento"
+
+msgid "Upload attachment"
+msgstr "Carica allegato"
+
+msgid "Upload photo"
+msgstr "Carica foto"
+
+msgid "Uploaded"
+msgstr "Caricato"
+
+msgid "User"
+msgstr "Utente"
+
+msgid "Valid until:"
+msgstr "Valido fino al:"
+
+msgid "VAT number"
+msgstr "Partita IVA"
+
+msgid "Vehicle"
+msgstr "Veicolo"
+
+msgid "Vehicle photo documentation"
+msgstr "Documentazione fotografica veicolo"
+
+msgid "Vehicle photos"
+msgstr "Foto del veicolo"
+
+msgid "Vehicles registered at the workshop. Search by plate, VIN, customer or model."
+msgstr "Veicoli registrati nell'officina. Cerca per targa, telaio, cliente o modello."
+
+msgid "VIN"
+msgstr "Telaio"
+
+msgid "View inventory"
+msgstr "Apri magazzino"
+
+msgid "View jobs"
+msgstr "Apri lavori"
+
+msgid "View requests"
+msgstr "Apri richieste"
+
+msgid "View work orders"
+msgstr "Apri ordini"
+
+msgid "Work order"
+msgstr "Ordine"
+
+msgid "Work order (optional)"
+msgstr "Ordine di lavoro (facoltativo)"
+
+msgid "Work orders by status"
+msgstr "Ordini per stato"
+
+msgid "Workshop and activity overview."
+msgstr "Panoramica dell'officina e delle attività."
+
+msgid "Yes"
+msgstr "Sì"
+
+msgid "You have no active sessions."
+msgstr "Non hai sessioni attive."
+
+msgid "Your account is not associated with an active workshop."
+msgstr "Il tuo account non è associato a un'officina attiva."
+
+msgid "Your account is not associated with an active workshop. Contact the administrator."
+msgstr "Il tuo account non è associato a un'officina attiva. Contatta l'amministratore."
+
+msgid "Your new password has been saved. You can now sign in with your username."
+msgstr "La nuova password è stata salvata. Ora puoi accedere con il tuo nome utente."
+
+msgid "PDF report"
+msgstr "Prospetto PDF"
+
+msgid "Administrative work order closure is restricted to reception staff."
+msgstr "La chiusura amministrativa dell'ordine è riservata al personale di accettazione."
+
+msgid "Attachment added to the part details."
+msgstr "Allegato aggiunto alla scheda ricambio."
+
+msgid "Author"
+msgstr "Autore"
+
+msgid "Call sent to the technician's profile."
+msgstr "Chiamata inviata al profilo del meccanico."
+
+msgid "Camper added to the fleet."
+msgstr "Camper aggiunto al parco mezzi."
+
+msgid "Closed at"
+msgstr "Data chiusura"
+
+msgid "Component"
+msgstr "Componente"
+
+msgid "Contact created."
+msgstr "Anagrafica creata."
+
+msgid "Contact updated."
+msgstr "Anagrafica aggiornata."
+
+msgid "Converting quotes to work orders is restricted to management roles."
+msgstr "La conversione dei preventivi in ordini di lavoro è riservata ai ruoli gestionali."
+
+msgid "Customer and supplier records are restricted to management roles."
+msgstr "L'anagrafica clienti e fornitori è riservata ai ruoli gestionali."
+
+msgid "Customer phone"
+msgstr "Telefono cliente"
+
+msgid "Custom item"
+msgstr "Articolo libero"
+
+msgid "Edit part"
+msgstr "Modifica articolo"
+
+msgid "Edit quote %(number)s"
+msgstr "Modifica preventivo %(number)s"
+
+msgid "Enter a valid quantity and movement type."
+msgstr "Inserisci una quantità valida e un tipo di movimento."
+
+msgid "File name"
+msgstr "Nome file"
+
+msgid "From"
+msgstr "Da"
+
+msgid "Insufficient stock: the issue was not recorded."
+msgstr "Giacenza insufficiente: carico non registrato."
+
+msgid "Invalid quote status."
+msgstr "Stato preventivo non valido."
+
+msgid "Invalid status."
+msgstr "Stato non valido."
+
+msgid "Inventory movement recorded."
+msgstr "Movimento di magazzino registrato."
+
+msgid "Invoiced"
+msgstr "Fatturato"
+
+msgid "Invoicing"
+msgstr "Fatturazione"
+
+msgid "Language"
+msgstr "Lingua"
+
+msgid "Low parts stock"
+msgstr "Scorta ricambi bassa"
+
+msgid "Not invoiced"
+msgstr "Da fatturare"
+
+msgid "Only an approved quote that has not already been converted can create a work order."
+msgstr "Solo un preventivo accettato e non ancora convertito può generare un ordine di lavoro."
+
+msgid "Only a senior technician or supervisor can reopen a completed job."
+msgstr "Solo un utente senior o responsabile può riaprire una lavorazione chiusa."
+
+msgid "Only a supervisor can call a technician."
+msgstr "Solo un responsabile può inviare una chiamata."
+
+msgid "Only a supervisor can edit the catalog; record an inventory movement to update stock."
+msgstr "La modifica del catalogo è riservata al responsabile; registra un movimento per aggiornare la giacenza."
+
+msgid "Only draft or sent quotes can be approved."
+msgstr "È possibile accettare solo un preventivo in bozza o già inviato."
+
+msgid "Part created. Record a movement to add initial stock."
+msgstr "Articolo creato. Registra un movimento per caricare la giacenza iniziale."
+
+msgid "Part details updated."
+msgstr "Scheda articolo aggiornata."
+
+msgid "Photo saved to the vehicle record."
+msgstr "Foto archiviata nella cartella del veicolo."
+
+msgid "Problem description"
+msgstr "Descrizione problema"
+
+msgid "Quote converted to work order %(number)s."
+msgstr "Preventivo convertito nell'ordine di lavoro %(number)s."
+
+msgid "Quote %(number)s created."
+msgstr "Preventivo %(number)s creato."
+
+msgid "Quotes are restricted to management roles."
+msgstr "I preventivi sono riservati ai ruoli gestionali."
+
+msgid "Quote status updated."
+msgstr "Stato del preventivo aggiornato."
+
+msgid "Quote updated."
+msgstr "Preventivo aggiornato."
+
+msgid "Reason"
+msgstr "Motivo"
+
+msgid "Requested quantity"
+msgstr "Quantità richiesta"
+
+msgid "Stock cannot be negative."
+msgstr "La giacenza non può diventare negativa."
+
+msgid "Supplier offer saved."
+msgstr "Condizione fornitore salvata."
+
+msgid "Supplier / price"
+msgstr "Fornitore / prezzo"
+
+msgid "The billing report is restricted to office staff."
+msgstr "Il prospetto di fatturazione è riservato all'ufficio."
+
+msgid "The job is not completed."
+msgstr "La lavorazione non è chiusa."
+
+msgid "The parts catalog and purchasing are managed by a supervisor."
+msgstr "Il catalogo e gli acquisti ricambi sono gestiti dal responsabile."
+
+msgid "This action is not valid for your job session status."
+msgstr "Azione non valida per lo stato personale della lavorazione."
+
+msgid "This job is not open."
+msgstr "Questa lavorazione non è aperta."
+
+msgid "%(title)s: changes saved."
+msgstr "%(title)s: modifiche salvate."
+
+msgid "%(title)s: item created."
+msgstr "%(title)s: elemento creato."
+
+msgid "To"
+msgstr "A"
+
+msgid "Uploaded by"
+msgstr "Caricato da"
+
+msgid "Vehicle details updated."
+msgstr "Scheda veicolo aggiornata."
+
+msgid "Work order number"
+msgstr "Numero OdL"
+
+msgid "You can record inventory movements; the parts catalog is managed by a supervisor."
+msgstr "Puoi registrare movimenti di magazzino; il catalogo ricambi è gestito dal responsabile."
+
+msgid "Your profile can only access work orders and parts."
+msgstr "Il tuo profilo può accedere solo a ordini di lavoro e ricambi."
+
+msgid "Your session for this job is already active."
+msgstr "La tua sessione su questa lavorazione è già attiva."
+
+msgid "Vehicle / camper"
+msgstr "Camper"
+
+msgid "The customer is automatically taken from the selected camper."
+msgstr "Il cliente viene associato automaticamente in base al proprietario del camper selezionato."
+
+msgid "Select a camper that has a registered customer as its owner."
+msgstr "Seleziona un camper associato a un cliente."
+
+msgid "A work order must be opened for a camper."
+msgstr "L'ordine di lavoro deve essere aperto su un camper."
+
+msgid "Select a customer from the same workshop."
+msgstr "Seleziona un cliente della stessa officina."
+
+msgid "Select a camper from the same workshop."
+msgstr "Seleziona un camper della stessa officina."
+
+msgid "A work order requires a camper assigned to a customer."
+msgstr "Un ordine di lavoro richiede un camper associato a un cliente."
+
+msgid "The customer must be the camper's owner."
+msgstr "Il cliente deve essere il proprietario del camper."
+
+msgid "Open work order"
+msgstr "Apri ordine di lavoro"
+
+msgid "Campers"
+msgstr "Camper"
+
+msgid "No campers are associated with this customer yet."
+msgstr "Nessun camper è ancora associato a questo cliente."
+
+msgid "Model"
+msgstr "Modello"
+
+msgid "Active"
+msgstr "Attivo"
+
+msgid "Inactive"
+msgstr "Non attivo"
+
+msgid "Assign a camper with a customer to this quote before converting it."
+msgstr "Associa un camper a un cliente nel preventivo prima di convertirlo."
+
+msgid "The quote customer must be the selected camper's owner."
+msgstr "Il cliente del preventivo deve essere il proprietario del camper selezionato."

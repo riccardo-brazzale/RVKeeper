@@ -1,14 +1,15 @@
 {% extends "base.html" %}
-{% block title %}Parco mezzi - RVKeeper{% endblock %}
+{% load i18n %}
+{% block title %}{% translate "Fleet" %} - RVKeeper{% endblock %}
 {% block content %}
-<h2>Parco mezzi</h2>
+<h2>{% translate "Fleet" %}</h2>
 <div class="panel">
-    <p>Veicoli registrati nell'officina. Cerca per targa, telaio, cliente o modello.</p>
-    <form method="get" class="actions" style="margin-bottom:16px"><input type="search" name="q" value="{{ search }}" placeholder="Targa, telaio, cliente…" aria-label="Cerca veicolo"><button type="submit">Cerca</button>{% if search %}<a href="{% url 'fleet:camper_list' %}">Azzera</a>{% endif %}</form>
-    {% if has_workshop %}<p><a class="button-link" href="{% url 'fleet:camper_create' %}">Aggiungi camper</a></p>
-        {% if campers %}<div class="table-wrap"><table><thead><tr><th>Numero interno</th><th>Targa</th><th>Veicolo</th><th>Proprietario</th><th>Chilometraggio</th></tr></thead><tbody>
+    <p>{% translate "Vehicles registered at the workshop. Search by plate, VIN, customer or model." %}</p>
+    <form method="get" class="actions" style="margin-bottom:16px"><input type="search" name="q" value="{{ search }}" placeholder="{% translate 'Plate, VIN, customer…' %}" aria-label="{% translate 'Search vehicles' %}"><button type="submit">{% translate "Search" %}</button>{% if search %}<a href="{% url 'fleet:camper_list' %}">{% translate "Clear" %}</a>{% endif %}</form>
+    {% if has_workshop %}<p><a class="button-link" href="{% url 'fleet:camper_create' %}">{% translate "Add camper" %}</a></p>
+        {% if campers %}<div class="table-wrap"><table><thead><tr><th>{% translate "Internal number" %}</th><th>{% translate "Plate" %}</th><th>{% translate "Vehicle" %}</th><th>{% translate "Owner" %}</th><th>{% translate "Mileage" %}</th></tr></thead><tbody>
         {% for camper in campers %}<tr><td><a href="{% url 'fleet:camper_detail' pk=camper.pk %}">{{ camper.internal_number }}</a></td><td>{{ camper.plate|default:"—" }}</td><td>{{ camper.brand }} {{ camper.model }}</td><td>{{ camper.owner|default:"—" }}</td><td>{{ camper.mileage|default:"—" }}</td></tr>{% endfor %}
-        </tbody></table></div>{% else %}<p>Nessun camper registrato. Usa “Aggiungi camper” per inserire il primo.</p>{% endif %}
-    {% else %}<p>Il tuo account non è ancora associato a un'officina attiva. Contatta l'amministratore.</p>{% endif %}
+        </tbody></table></div>{% else %}<p>{% translate "No campers are registered. Use “Add camper” to add the first one." %}</p>{% endif %}
+    {% else %}<p>{% translate "Your account is not associated with an active workshop. Contact the administrator." %}</p>{% endif %}
 </div>
 {% endblock %}

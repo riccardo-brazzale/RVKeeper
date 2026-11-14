@@ -7,6 +7,7 @@ from django.core import serializers
 from django.http import Http404, HttpResponse, HttpResponseForbidden
 from django.shortcuts import get_object_or_404, redirect, render
 from django.utils import timezone
+from django.utils.translation import gettext_lazy as _
 from io import BytesIO
 from xml.sax.saxutils import escape
 
@@ -36,7 +37,7 @@ def _is_mechanic(user):
 
 def _forbidden_for_mechanic(request):
     if _is_mechanic(request.user):
-        return HttpResponseForbidden("Il tuo profilo può accedere solo a ordini di lavoro e ricambi.")
+        return HttpResponseForbidden(_("Your profile can only access work orders and parts."))
     return None
 
 
@@ -59,15 +60,22 @@ def camper_create(request):
     if denied := _forbidden_for_mechanic(request): return denied
     workshop = _active_workshop(request.user)
     if workshop is None:
-        messages.error(request, "Il tuo account non è associato a un'officina attiva.")
+        messages.error(request, _("Your account is not associated with an active workshop."))
         return redirect("fleet:camper_list")
 
-    form = CamperForm(request.POST or None, workshop=workshop)
+    initial = {}
+    owner_id = request.GET.get("owner")
+    if request.method == "GET" and owner_id:
+        initial["owner"] = get_object_or_404(
+            CamperOwner.objects.filter(workshop=workshop, kind__in=("customer", "both")),
+            pk=owner_id,
+        )
+    form = CamperForm(request.POST or None, workshop=workshop, initial=initial)
     if request.method == "POST" and form.is_valid():
         camper = form.save(commit=False)
         camper.workshop = workshop
         camper.save()
-        messages.success(request, "Camper aggiunto al parco mezzi.")
+        messages.success(request, _("Camper added to the fleet."))
         return redirect("fleet:camper_list")
     return render(request, "fleet/camper_form.html", {"form": form})
 
@@ -81,7 +89,7 @@ def camper_edit(request, pk):
     form = CamperForm(request.POST or None, instance=camper, workshop=workshop)
     if request.method == "POST" and form.is_valid():
         form.save()
-        messages.success(request, "Scheda veicolo aggiornata.")
+        messages.success(request, _("Vehicle details updated."))
         return redirect("fleet:camper_detail", pk=camper.pk)
     return render(request, "fleet/camper_form.html", {"form": form, "camper": camper})
 
@@ -108,20 +116,20 @@ def camper_photo_upload(request, pk):
         photo.camper = camper
         photo.save()
         _audit(workshop, request.user, "photo_upload", Camper, camper)
-        messages.success(request, "Foto archiviata nella cartella del veicolo.")
+        messages.success(request, _("Photo saved to the vehicle record."))
         return redirect("fleet:camper_detail", pk=camper.pk)
     return render(request, "fleet/camper_photo_form.html", {"camper": camper, "form": form})
 
 
 MODULES = {
-    "orders": (WorkOrder, "Ordini di lavoro", ("ro_number", "customer", "customer_phone", "status", "completed_at", "invoiced")),
-    "jobs": (Job, "Lavori e tecnici", ("work_order", "title", "department", "status")),
-    "requests": (PartsRequest, "Richieste ricambi", ("work_order", "part", "supplier_offer", "custom_item", "quantity_requested", "status")),
-    "claims": (WarrantyClaim, "Garanzie", ("work_order", "component", "problem_description", "status")),
-    "returns": (WarrantyReturn, "Resi in garanzia", ("work_order", "part_name", "quantity", "status")),
-    "attachments": (Attachment, "Allegati", ("work_order", "category", "file_name", "caption", "uploaded_by", "created_at")),
-    "notes": (JobNote, "Note interventi", ("job", "author", "language", "text", "created_at")),
-    "assignments": (JobAssignment, "Assegnazioni tecnici", ("job", "from_technician", "to_technician", "reason", "created_at")),
+    "orders": (WorkOrder, _("Work orders"), ("ro_number", "vehicle", "customer", "customer_phone", "status", "completed_at", "invoiced")),
+    "jobs": (Job, _("Jobs and technicians"), ("work_order", "title", "department", "status")),
+    "requests": (PartsRequest, _("Parts requests"), ("work_order", "part", "supplier_offer", "custom_item", "quantity_requested", "status")),
+    "claims": (WarrantyClaim, _("Warranty claims"), ("work_order", "component", "problem_description", "status")),
+    "returns": (WarrantyReturn, _("Warranty returns"), ("work_order", "part_name", "quantity", "status")),
+    "attachments": (Attachment, _("Attachments"), ("work_order", "category", "file_name", "caption", "uploaded_by", "created_at")),
+    "notes": (JobNote, _("Job notes"), ("job", "author", "language", "text", "created_at")),
+    "assignments": (JobAssignment, _("Technician assignments"), ("job", "from_technician", "to_technician", "reason", "created_at")),
 }
 FORM_EXCLUDES = {
     WorkOrder: ("workshop", "status", "created_by", "completed_at", "invoiced", "invoiced_at", "invoiced_by", "created_at", "updated_at"),
@@ -145,7 +153,7 @@ def _module(module):
 def _workshop_or_redirect(request):
     workshop = _active_workshop(request.user)
     if workshop is None:
-        messages.error(request, "Il tuo account non è associato a un'officina attiva.")
+        messages.error(request, _("Your account is not associated with an active workshop."))
     return workshop
 
 
@@ -172,21 +180,6 @@ def _job_minutes(job):
     now = timezone.now()
     seconds += sum(max(0, (now - started).total_seconds()) for started in running.values())
     return int(seconds // 60)
-
-
-def _assign_work_order_customer(form, order):
-    if order.vehicle_id:
-        vehicle_customer = order.vehicle.owner if order.vehicle.owner_id and order.vehicle.owner.is_customer else None
-        if order.customer_id and vehicle_customer and order.customer_id != vehicle_customer.pk:
-            form.add_error("customer", "Il cliente deve coincidere con il proprietario del veicolo.")
-            return False
-        if not order.customer_id and vehicle_customer:
-            order.customer = vehicle_customer
-    if order.customer_id:
-        order.customer_name = str(order.customer)
-        order.customer_phone = order.customer.phone
-        order.customer_email = order.customer.email
-    return True
 
 
 @login_required
@@ -253,7 +246,7 @@ def workflow_list(request, module):
                 elif field.choices:
                     value = getattr(obj, f"get_{name}_display")()
                 elif module == "orders" and name == "invoiced":
-                    value = "Fatturato" if obj.invoiced else "Da fatturare"
+                    value = _("Invoiced") if obj.invoiced else _("Not invoiced")
                 elif module == "orders" and name == "completed_at":
                     value = timezone.localtime(obj.completed_at).strftime("%d/%m/%Y %H:%M") if obj.completed_at else "—"
                 else:
@@ -263,20 +256,20 @@ def workflow_list(request, module):
             values.append(value)
         display_rows.append((obj, values))
     headers = {
-        "orders": ("Numero OdL", "Cliente (anagrafica)", "Telefono cliente", "Stato", "Data chiusura", "Fatturazione"),
-        "jobs": ("Ordine", "Intervento", "Tecnico", "Stato"),
-        "requests": ("Ordine", "Ricambio", "Fornitore / prezzo", "Articolo libero", "Quantità richiesta", "Stato"),
-        "claims": ("Ordine", "Componente", "Descrizione problema", "Stato"),
-        "returns": ("Ordine", "Ricambio", "Quantità", "Stato"),
-        "attachments": ("Ordine", "Categoria", "Nome file", "Descrizione", "Caricato da", "Data"),
-        "notes": ("Lavoro", "Autore", "Lingua", "Nota", "Data"),
-        "assignments": ("Lavoro", "Da", "A", "Motivo", "Data"),
+        "orders": (_("Work order"), _("Camper"), _("Customer"), _("Customer phone"), _("Status"), _("Closed at"), _("Invoicing")),
+        "jobs": (_("Work order"), _("Job"), _("Technician"), _("Status")),
+        "requests": (_("Work order"), _("Part"), _("Supplier / price"), _("Custom item"), _("Requested quantity"), _("Status")),
+        "claims": (_("Work order"), _("Component"), _("Problem description"), _("Status")),
+        "returns": (_("Work order"), _("Part"), _("Quantity"), _("Status")),
+        "attachments": (_("Work order"), _("Category"), _("File name"), _("Description"), _("Uploaded by"), _("Date")),
+        "notes": (_("Job"), _("Author"), _("Language"), _("Note"), _("Date")),
+        "assignments": (_("Job"), _("From"), _("To"), _("Reason"), _("Date")),
     }
     column_headers = headers.get(module, columns)
     if module == "requests" and _is_mechanic(request.user):
-        column_headers = ("Ordine", "Ricambio", "Articolo libero", "Quantità richiesta", "Stato")
+        column_headers = (_("Work order"), _("Part"), _("Custom item"), _("Requested quantity"), _("Status"))
     if module == "orders" and _is_mechanic(request.user):
-        column_headers = ("Numero OdL", "Cliente", "Telefono", "Stato", "Data chiusura")
+        column_headers = (_("Work order number"), _("Camper"), _("Customer"), _("Phone"), _("Status"), _("Closed at"))
     context = {"module": module, "title": title, "objects": objects, "columns": columns, "headers": column_headers, "display_rows": display_rows, "model": model,
                "status_choices": model._meta.get_field("status").choices if any(f.name == "status" for f in model._meta.fields) else ()}
     if module == "jobs":
@@ -293,7 +286,7 @@ def workflow_list(request, module):
 @login_required
 def workflow_create(request, module):
     if _is_mechanic(request.user) and module in ("orders", "jobs", "parts"):
-        return HttpResponseForbidden("Puoi registrare movimenti di magazzino; il catalogo ricambi è gestito dal responsabile.")
+        return HttpResponseForbidden(_("You can record inventory movements; the parts catalog is managed by a supervisor."))
     if module not in ("orders", "jobs", "parts", "requests") and _forbidden_for_mechanic(request):
         return _forbidden_for_mechanic(request)
     if module == "owners":
@@ -303,12 +296,22 @@ def workflow_create(request, module):
     workshop = _workshop_or_redirect(request)
     if workshop is None:
         return redirect("home")
-    model, title, _ = _module(module)
+    model, title = _module(module)[:2]
     exclude = FORM_EXCLUDES[model]
     if model is PartsRequest and _is_mechanic(request.user):
         exclude = exclude + ("supplier", "supplier_offer")
     if model is WorkOrder:
-        form = WorkOrderForm(request.POST or None, workshop=workshop, require_customer=True)
+        initial = {}
+        vehicle_id = request.GET.get("vehicle")
+        if request.method == "GET" and vehicle_id:
+            initial["vehicle"] = get_object_or_404(
+                Camper.objects.filter(
+                    workshop=workshop,
+                    owner__kind__in=("customer", "both"),
+                ),
+                pk=vehicle_id,
+            )
+        form = WorkOrderForm(request.POST or None, workshop=workshop, initial=initial)
     else:
         Form = modelform_factory(model, exclude=exclude)
         form = Form(request.POST or None, request.FILES or None)
@@ -317,8 +320,6 @@ def workflow_create(request, module):
             related_model = field.queryset.model
             if hasattr(related_model, "workshop"):
                 field.queryset = field.queryset.filter(workshop=workshop)
-                if model is WorkOrder and related_model is CamperOwner:
-                    field.queryset = field.queryset.filter(kind__in=("customer", "both"))
                 if _is_mechanic(request.user) and model is PartsRequest and related_model is WorkOrder:
                     field.queryset = field.queryset.filter(jobs__participations__mechanic=request.user, jobs__participations__is_active=True).distinct()
                 if _is_mechanic(request.user) and model is PartsRequest and related_model is Job:
@@ -337,8 +338,6 @@ def workflow_create(request, module):
             if related is not None and getattr(related, "workshop_id", workshop.pk) != workshop.pk:
                 form.add_error(None, "Seleziona un elemento appartenente alla stessa officina.")
                 return render(request, "fleet/workflow_form.html", {"form": form, "title": title, "module": module})
-        if isinstance(obj, WorkOrder) and not _assign_work_order_customer(form, obj):
-            return render(request, "fleet/workflow_form.html", {"form": form, "title": title, "module": module})
         obj.workshop = workshop
         if isinstance(obj, WorkOrder): obj.created_by = request.user
         if isinstance(obj, PartsRequest): obj.requested_by = request.user
@@ -353,7 +352,7 @@ def workflow_create(request, module):
             obj.translations = {}
             try:
                 from deep_translator import GoogleTranslator
-                for language, _ in request.user.LANGUAGE_CHOICES:
+                for language, _language_label in request.user.LANGUAGE_CHOICES:
                     if language != obj.language:
                         try:
                             obj.translations[language] = GoogleTranslator(source=obj.language[:2], target=language[:2]).translate(obj.text) or ""
@@ -376,7 +375,7 @@ def workflow_create(request, module):
             Notification.objects.create(workshop=workshop, user=obj.to_technician, title="Chiamata su lavorazione",
                 body=f"{obj.job.work_order.ro_number} · {obj.job.title}", link="/lavori/miei/", work_order=obj.job.work_order)
         _audit(workshop, request.user, "create", model, obj)
-        messages.success(request, f"{title}: elemento creato.")
+        messages.success(request, _("%(title)s: item created.") % {"title": title})
         return redirect("fleet:workflow_list", module=module)
     return render(request, "fleet/workflow_form.html", {"form": form, "title": title, "module": module})
 
@@ -384,7 +383,7 @@ def workflow_create(request, module):
 @login_required
 def workflow_edit(request, module, pk):
     if _is_mechanic(request.user) and module in ("orders", "jobs", "requests", "parts"):
-        return HttpResponseForbidden("La modifica del catalogo è riservata al responsabile; registra un movimento per aggiornare la giacenza.")
+        return HttpResponseForbidden(_("Only a supervisor can edit the catalog; record an inventory movement to update stock."))
     if module not in ("orders", "jobs", "parts", "requests") and _forbidden_for_mechanic(request):
         return _forbidden_for_mechanic(request)
     if module == "owners":
@@ -393,7 +392,7 @@ def workflow_edit(request, module, pk):
         return redirect("part_edit", pk=pk)
     workshop = _workshop_or_redirect(request)
     if workshop is None: return redirect("home")
-    model, title, _ = _module(module)
+    model, title = _module(module)[:2]
     obj = get_object_or_404(model, pk=pk, workshop=workshop)
     if model is WorkOrder:
         form = WorkOrderForm(request.POST or None, instance=obj, workshop=workshop)
@@ -409,8 +408,6 @@ def workflow_edit(request, module, pk):
                     field.queryset = field.queryset.filter(jobs__participations__mechanic=request.user, jobs__participations__is_active=True).distinct()
                 if _is_mechanic(request.user) and model is PartsRequest and related_model is Job:
                     field.queryset = field.queryset.filter(participations__mechanic=request.user, participations__is_active=True)
-                if model is WorkOrder and related_model is CamperOwner:
-                    field.queryset = field.queryset.filter(kind__in=("customer", "both"))
             elif related_model._meta.label == "accounts.User":
                 field.queryset = related_model.objects.filter(memberships__workshop=workshop, memberships__is_active=True, is_active=True).distinct()
             elif related_model is DocumentCategory:
@@ -422,15 +419,13 @@ def workflow_edit(request, module, pk):
         if isinstance(obj, PartsRequest) and obj.supplier_offer_id:
             obj.supplier = str(obj.supplier_offer.supplier)
             obj.purchase_price = obj.supplier_offer.net_purchase_price
-        if isinstance(obj, WorkOrder) and not _assign_work_order_customer(form, obj):
-            return render(request, "fleet/workflow_form.html", {"form": form, "title": f"Modifica · {title}", "module": module})
         obj.save()
         form.save_m2m()
         if isinstance(obj, Attachment) and "file" in request.FILES:
             obj.file_name = obj.file.name
             obj.save(update_fields=("file_name",))
         _audit(workshop, request.user, "update", model, obj)
-        messages.success(request, f"{title}: modifiche salvate.")
+        messages.success(request, _("%(title)s: changes saved.") % {"title": title})
         return redirect("fleet:workflow_list", module=module)
     return render(request, "fleet/workflow_form.html", {"form": form, "title": f"Modifica · {title}", "module": module})
 
@@ -446,13 +441,13 @@ def job_action(request, pk, action):
     participation = JobParticipation.objects.filter(job=job, mechanic=request.user, is_active=True).first()
 
     if action == "call":
-        if _is_mechanic(request.user): return HttpResponseForbidden("Solo un responsabile può inviare una chiamata.")
+        if _is_mechanic(request.user): return HttpResponseForbidden(_("Only a supervisor can call a technician."))
         mechanic = get_object_or_404(request.user.__class__, pk=request.POST.get("mechanic"), department="technician", memberships__workshop=workshop, memberships__is_active=True)
         call, created = JobCall.objects.get_or_create(workshop=workshop, job=job, mechanic=mechanic, accepted_at__isnull=True, dismissed_at__isnull=True,
             defaults={"called_by": request.user})
         if created:
             Notification.objects.create(workshop=workshop, user=mechanic, title="Chiamata su lavorazione", body=f"{job.work_order.ro_number} · {job.title}", link="/lavori/miei/", work_order=job.work_order)
-        messages.success(request, "Chiamata inviata al profilo del meccanico.")
+        messages.success(request, _("Call sent to the technician's profile."))
         return redirect("jobs")
 
     if action == "accept_call":
@@ -474,9 +469,9 @@ def job_action(request, pk, action):
         return redirect("my_jobs")
 
     if action == "reopen":
-        if not is_supervisor: return HttpResponseForbidden("Solo un utente senior o responsabile può riaprire una lavorazione chiusa.")
+        if not is_supervisor: return HttpResponseForbidden(_("Only a senior technician or supervisor can reopen a completed job."))
         if job.status != "completed":
-            messages.error(request, "La lavorazione non è chiusa.")
+            messages.error(request, _("The job is not completed."))
         else:
             job.status, job.completed_at = "in_progress", None
             job.save(update_fields=("status", "completed_at", "updated_at"))
@@ -485,7 +480,7 @@ def job_action(request, pk, action):
         return redirect("fleet:workflow_list", module="jobs")
 
     if action == "start":
-        if job.status in ("completed", "cancelled"): return HttpResponseForbidden("Questa lavorazione non è aperta.")
+        if job.status in ("completed", "cancelled"): return HttpResponseForbidden(_("This job is not open."))
         participation, created = JobParticipation.objects.get_or_create(workshop=workshop, job=job, mechanic=request.user, is_active=True,
             defaults={"source": "self", "started_at": now})
         if not created and participation.paused_at:
@@ -493,7 +488,7 @@ def job_action(request, pk, action):
             participation.save(update_fields=("paused_at",))
             event = "resume"
         elif not created:
-            messages.info(request, "La tua sessione su questa lavorazione è già attiva.")
+            messages.info(request, _("Your session for this job is already active."))
             return redirect("my_jobs" if _is_mechanic(request.user) else "jobs")
         else:
             event = "start"
@@ -526,7 +521,7 @@ def job_action(request, pk, action):
             job.status = "paused"
             job.save(update_fields=("status", "updated_at"))
     else:
-        messages.error(request, "Azione non valida per lo stato personale della lavorazione.")
+        messages.error(request, _("This action is not valid for your job session status."))
     _audit(workshop, request.user, action, Job, job)
     return redirect("my_jobs" if _is_mechanic(request.user) else "jobs")
 
@@ -555,7 +550,7 @@ def parts_request_action(request, pk, action):
             if item.part_id and not item.inventory_applied:
                 part = Part.objects.select_for_update().get(pk=item.part_id, workshop=workshop)
                 if part.quantity < qty * item.conversion_factor:
-                    messages.error(request, "Giacenza insufficiente: carico non registrato.")
+                    messages.error(request, _("Insufficient stock: the issue was not recorded."))
                     return redirect("fleet:workflow_list", module="requests")
                 part.quantity -= qty * item.conversion_factor
                 part.save(update_fields=("quantity", "updated_at"))
@@ -584,9 +579,9 @@ def workflow_status_action(request, module, pk):
     allowed = {value for value, _ in status_field.choices}
     new_status = request.POST.get("status")
     if module == "orders" and _is_mechanic(request.user) and new_status not in ("open", "in_progress", "ready_inspection", "additional_work"):
-        return HttpResponseForbidden("La chiusura amministrativa dell'ordine è riservata al personale di accettazione.")
+        return HttpResponseForbidden(_("Administrative work order closure is restricted to reception staff."))
     if new_status not in allowed:
-        messages.error(request, "Stato non valido.")
+        messages.error(request, _("Invalid status."))
         return redirect("fleet:workflow_list", module=module)
     obj.status = new_status
     if isinstance(obj, WorkOrder) and new_status == "completed" and obj.completed_at is None:
@@ -611,7 +606,7 @@ def workflow_status_action(request, module, pk):
 @login_required
 def work_order_report(request, pk):
     if _is_mechanic(request.user):
-        return HttpResponseForbidden("Il prospetto di fatturazione è riservato all'ufficio.")
+        return HttpResponseForbidden(_("The billing report is restricted to office staff."))
     if request.method != "POST":
         return redirect("orders")
     workshop = _workshop_or_redirect(request)

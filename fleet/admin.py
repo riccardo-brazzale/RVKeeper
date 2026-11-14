@@ -1,6 +1,13 @@
 from django.contrib import admin
 
-from .models import Attachment, AuditLog, CamperPhoto, DocumentCategory
+from .models import Attachment, AuditLog, Camper, CamperPhoto, DocumentCategory
+
+
+@admin.register(Camper)
+class CamperAdmin(admin.ModelAdmin):
+    list_display = ("internal_number", "plate", "brand", "model", "owner", "workshop", "is_active")
+    list_filter = ("workshop", "is_active", "fuel_type", "transmission")
+    search_fields = ("internal_number", "plate", "vin", "brand", "model", "owner__company_name", "owner__last_name")
 
 
 @admin.register(DocumentCategory)

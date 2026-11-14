@@ -1,5 +1,6 @@
 from django.core.exceptions import ValidationError
 from django.db import models
+from django.utils.translation import gettext_lazy as _
 
 
 class PauseReason(models.Model):
@@ -59,15 +60,19 @@ class WorkOrder(models.Model):
 
     def clean(self):
         super().clean()
+        if not self.vehicle_id:
+            raise ValidationError({"vehicle": _("A work order must be opened for a camper.")})
         if self.customer_id and ((self.workshop_id and self.customer.workshop_id != self.workshop_id) or not self.customer.is_customer):
-            raise ValidationError({"customer": "Seleziona un cliente della stessa officina."})
-        if self.vehicle_id and self.workshop_id and self.vehicle.workshop_id != self.workshop_id:
-            raise ValidationError({"vehicle": "Seleziona un veicolo della stessa officina."})
-        if self.customer_id and self.vehicle_id and self.vehicle.owner_id and self.vehicle.owner_id != self.customer_id:
-            raise ValidationError({"customer": "Il cliente deve coincidere con il proprietario del veicolo."})
+            raise ValidationError({"customer": _("Select a customer from the same workshop.")})
+        if self.workshop_id and self.vehicle.workshop_id != self.workshop_id:
+            raise ValidationError({"vehicle": _("Select a camper from the same workshop.")})
+        if not self.vehicle.owner_id or not self.vehicle.owner.is_customer:
+            raise ValidationError({"vehicle": _("A work order requires a camper assigned to a customer.")})
+        if self.customer_id and self.vehicle.owner_id != self.customer_id:
+            raise ValidationError({"customer": _("The customer must be the camper's owner.")})
 
     def __str__(self):
-        return f"RO {self.ro_number} · {self.customer or self.customer_name}"
+        return f"RO {self.ro_number} · {self.vehicle or self.customer or self.customer_name}"
 
 
 class Job(models.Model):

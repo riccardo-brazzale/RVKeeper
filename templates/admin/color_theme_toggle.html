@@ -13,12 +13,12 @@
     <use xlink:href="#icon-sun" />
   </svg>
 </button>
-<form class="language-selector" action="{% url 'set_language' %}" method="post">
+<form class="language-selector" action="{% url 'user_preferences' %}" method="post">
   {% csrf_token %}
   <input type="hidden" name="next" value="{{ request.get_full_path }}">
   <label class="visually-hidden" for="admin-language">{% translate 'Language' %}</label>
-  <select id="admin-language" name="language" aria-label="{% translate 'Language' %}" onchange="this.form.submit()">
-    <option value="it" aria-label="Italiano" title="Italiano" {% if LANGUAGE_CODE == 'it' %}selected{% endif %}>🇮🇹</option>
-    <option value="en-us" aria-label="English" title="English" {% if LANGUAGE_CODE == 'en-us' %}selected{% endif %}>🇬🇧</option>
+  <select id="admin-language" name="preferred_language" aria-label="{% translate 'Language' %}" onchange="this.form.submit()">
+    <option value="it" aria-label="Italiano" title="Italiano" {% if user.preferred_language == 'it' %}selected{% endif %}>🇮🇹</option>
+    <option value="en-us" aria-label="English" title="English" {% if user.preferred_language == 'en-us' %}selected{% endif %}>🇬🇧</option>
   </select>
 </form>

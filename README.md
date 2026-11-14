@@ -4,6 +4,8 @@ RVKeeper is a Django application for camper service workshops. It uses PostgreSQ
 
 ## Production install
 
+The interface defaults to English. Signed-in users can change their saved interface language between English and Italian from **Settings**. After changing translation catalogs, run `python manage.py compilemessages` before starting the application.
+
 The automated installer supports Debian and Ubuntu with systemd. It installs the system dependencies, creates `.venv` and a private `.env`, provisions a local PostgreSQL role/database, applies migrations, asks for the initial Django superuser, creates an initial US demo workshop and dataset, then configures Gunicorn and Nginx.
 
 On a fresh server:

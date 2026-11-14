@@ -1,16 +1,17 @@
 {% extends "base.html" %}
-{% block title %}Dashboard - RVKeeper{% endblock %}
+{% load i18n %}
+{% block title %}{% translate "Dashboard" %} - RVKeeper{% endblock %}
 {% block content %}
-<h2>Dashboard</h2>
-<p>Panoramica dell'officina e delle attivitÃ .</p>
+<h2>{% translate "Dashboard" %}</h2>
+<p>{% translate "Workshop and activity overview." %}</p>
 {% if has_workshop %}
 <div class="summary-grid">
-    <div class="panel"><strong>Ordini aperti</strong><p class="metric">{{ orders_open }}</p><a href="{% url 'orders' %}">Apri ordini</a></div>
-    <div class="panel"><strong>Lavori in corso</strong><p class="metric">{{ jobs_active }}</p><a href="{% url 'jobs' %}">Apri lavori</a></div>
-    <div class="panel"><strong>Richieste ricambi</strong><p class="metric">{{ requests_open }}</p><a href="{% url 'parts_requests' %}">Apri richieste</a></div>
-    <div class="panel"><strong>Ricambi sotto scorta</strong><p class="metric">{{ low_stock_count }}</p><a href="{% url 'inventory' %}">Apri magazzino</a></div>
+    <div class="panel"><strong>{% translate "Open work orders" %}</strong><p class="metric">{{ orders_open }}</p><a href="{% url 'orders' %}">{% translate "View work orders" %}</a></div>
+    <div class="panel"><strong>{% translate "Active jobs" %}</strong><p class="metric">{{ jobs_active }}</p><a href="{% url 'jobs' %}">{% translate "View jobs" %}</a></div>
+    <div class="panel"><strong>{% translate "Open parts requests" %}</strong><p class="metric">{{ requests_open }}</p><a href="{% url 'parts_requests' %}">{% translate "View requests" %}</a></div>
+    <div class="panel"><strong>{% translate "Low-stock parts" %}</strong><p class="metric">{{ low_stock_count }}</p><a href="{% url 'inventory' %}">{% translate "View inventory" %}</a></div>
 </div>
-<div class="panel"><h3>Ordini recenti</h3>{% if recent_orders %}<div class="table-wrap"><table><tr><th>RO</th><th>Cliente</th><th>Telefono</th><th>Veicolo</th><th>Stato</th></tr>{% for order in recent_orders %}<tr><td>{{ order.ro_number }}</td><td>{{ order.customer|default:order.customer_name|default:"â€”" }}</td><td>{% if order.customer_id %}{{ order.customer.phone|default:"â€”" }}{% else %}{{ order.customer_phone|default:"â€”" }}{% endif %}</td><td>{{ order.make }} {{ order.model }}</td><td>{{ order.get_status_display }}</td></tr>{% endfor %}</table></div>{% else %}<p>Nessun ordine inserito.</p>{% endif %}</div>
-<div class="panel"><h3>Lavori attivi</h3>{% if active_jobs %}<div class="table-wrap"><table><tr><th>Ordine</th><th>Intervento</th><th>Tecnico</th><th>Stato</th></tr>{% for job in active_jobs %}<tr><td>{{ job.work_order.ro_number }}</td><td>{{ job.title }}</td><td>{{ job.assigned_to|default:"â€”" }}</td><td>{{ job.get_status_display }}</td></tr>{% endfor %}</table></div>{% else %}<p>Nessun lavoro attivo.</p>{% endif %}</div>
-{% else %}<div class="panel"><p>Il tuo account non Ã¨ associato a un'officina attiva. Contatta l'amministratore.</p></div>{% endif %}
+<div class="panel"><h3>{% translate "Recent work orders" %}</h3>{% if recent_orders %}<div class="table-wrap"><table><tr><th>{% translate "RO" %}</th><th>{% translate "Customer" %}</th><th>{% translate "Phone" %}</th><th>{% translate "Vehicle" %}</th><th>{% translate "Status" %}</th></tr>{% for order in recent_orders %}<tr><td>{{ order.ro_number }}</td><td>{{ order.customer|default:order.customer_name|default:"—" }}</td><td>{% if order.customer_id %}{{ order.customer.phone|default:"—" }}{% else %}{{ order.customer_phone|default:"—" }}{% endif %}</td><td>{{ order.make }} {{ order.model }}</td><td>{{ order.get_status_display }}</td></tr>{% endfor %}</table></div>{% else %}<p>{% translate "No work orders have been added." %}</p>{% endif %}</div>
+<div class="panel"><h3>{% translate "Active jobs" %}</h3>{% if active_jobs %}<div class="table-wrap"><table><tr><th>{% translate "Work order" %}</th><th>{% translate "Job" %}</th><th>{% translate "Technician" %}</th><th>{% translate "Status" %}</th></tr>{% for job in active_jobs %}<tr><td>{{ job.work_order.ro_number }}</td><td>{{ job.title }}</td><td>{{ job.assigned_to|default:"—" }}</td><td>{{ job.get_status_display }}</td></tr>{% endfor %}</table></div>{% else %}<p>{% translate "No active jobs." %}</p>{% endif %}</div>
+{% else %}<div class="panel"><p>{% translate "Your account is not associated with an active workshop. Contact the administrator." %}</p></div>{% endif %}
 {% endblock %}

@@ -16,7 +16,11 @@ class QuoteForm(forms.ModelForm):
     def __init__(self, *args, workshop, **kwargs):
         super().__init__(*args, **kwargs)
         self.fields["customer"].queryset = CamperOwner.objects.filter(workshop=workshop, kind__in=("customer", "both"))
-        self.fields["vehicle"].queryset = Camper.objects.filter(workshop=workshop, is_active=True)
+        self.fields["vehicle"].queryset = Camper.objects.filter(
+            workshop=workshop,
+            is_active=True,
+            owner__kind__in=("customer", "both"),
+        ).select_related("owner")
         self.fields["vehicle"].required = False
 
 

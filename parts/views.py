@@ -5,6 +5,7 @@ from django.contrib.auth.decorators import login_required
 from django.db import models, transaction
 from django.http import Http404, HttpResponseForbidden
 from django.shortcuts import get_object_or_404, redirect, render
+from django.utils.translation import gettext_lazy as _
 
 from workshops.models import Membership
 from fleet.models import AuditLog, Notification
@@ -21,7 +22,7 @@ def _active_workshop(user):
 def _workshop_or_redirect(request):
     workshop = _active_workshop(request.user)
     if workshop is None:
-        messages.error(request, "Il tuo account non è associato a un'officina attiva.")
+        messages.error(request, _("Your account is not associated with an active workshop."))
     return workshop
 
 
@@ -31,7 +32,7 @@ def _is_mechanic(user):
 
 def _deny_mechanic(request):
     if _is_mechanic(request.user):
-        return HttpResponseForbidden("Il catalogo e gli acquisti ricambi sono gestiti dal responsabile.")
+        return HttpResponseForbidden(_("The parts catalog and purchasing are managed by a supervisor."))
     return None
 
 
@@ -53,7 +54,7 @@ def inventory(request):
     low_stock = parts.filter(quantity__lte=models.F("min_stock"))
     for part in low_stock:
         Notification.objects.get_or_create(
-            workshop=workshop, user=None, title="Scorta ricambi bassa", link="/magazzino/", read=False,
+            workshop=workshop, user=None, title=_("Low parts stock"), link="/magazzino/", read=False,
             defaults={"body": f"{part.part_number} · {part.name}: disponibili {part.quantity}, minimo {part.min_stock}"},
         )
     return render(request, "parts/part_list.html", {
@@ -74,9 +75,9 @@ def part_create(request):
         part.workshop = workshop
         part.save()
         _audit(workshop, request.user, "create", part)
-        messages.success(request, "Articolo creato. Registra un movimento per caricare la giacenza iniziale.")
+        messages.success(request, _("Part created. Record a movement to add initial stock."))
         return redirect("part_detail", pk=part.pk)
-    return render(request, "parts/part_form.html", {"form": form, "title": "Nuovo articolo"})
+    return render(request, "parts/part_form.html", {"form": form, "title": _("New part")})
 
 
 @login_required
@@ -91,9 +92,9 @@ def part_edit(request, pk):
     if request.method == "POST" and form.is_valid():
         part = form.save()
         _audit(workshop, request.user, "update", part)
-        messages.success(request, "Scheda articolo aggiornata.")
+        messages.success(request, _("Part details updated."))
         return redirect("part_detail", pk=part.pk)
-    return render(request, "parts/part_form.html", {"form": form, "title": "Modifica articolo", "part": part})
+    return render(request, "parts/part_form.html", {"form": form, "title": _("Edit part"), "part": part})
 
 
 @login_required
@@ -125,7 +126,7 @@ def part_movement(request, pk):
             if qty < 0 or (kind != "adjustment" and qty == 0) or kind not in ("in", "out", "adjustment"):
                 raise InvalidOperation
         except (InvalidOperation, TypeError):
-            messages.error(request, "Inserisci una quantità valida e un tipo di movimento.")
+            messages.error(request, _("Enter a valid quantity and movement type."))
             return redirect("part_movement", pk=part.pk)
         with transaction.atomic():
             locked = Part.objects.select_for_update().get(pk=part.pk, workshop=workshop)
@@ -133,7 +134,7 @@ def part_movement(request, pk):
             if kind == "adjustment":
                 delta = qty - locked.quantity
             if locked.quantity + delta < 0:
-                messages.error(request, "La giacenza non può diventare negativa.")
+                messages.error(request, _("Stock cannot be negative."))
                 return redirect("part_movement", pk=part.pk)
             order_id = request.POST.get("work_order") or None
             order = get_object_or_404(orders, pk=order_id) if order_id else None
@@ -143,7 +144,7 @@ def part_movement(request, pk):
                 movement_type=kind, quantity=delta if kind == "adjustment" else qty,
                 unit_cost=locked.cost_price, note=request.POST.get("note", "").strip(), created_by=request.user)
             _audit(workshop, request.user, "stock_" + kind, locked, f"Variazione {delta} {locked.unit}")
-        messages.success(request, "Movimento di magazzino registrato.")
+        messages.success(request, _("Inventory movement recorded."))
         return redirect("inventory")
     return render(request, "parts/part_movement.html", {
         "part": part, "orders": orders, "movements": part.movements.select_related("work_order", "created_by")[:30],
@@ -172,7 +173,7 @@ def part_supplier_offer(request, part_pk, offer_pk=None):
                 locked_part.cost_price = offer.net_purchase_price
                 locked_part.save(update_fields=("cost_price", "updated_at"))
             offer.save()
-        messages.success(request, "Condizione fornitore salvata.")
+        messages.success(request, _("Supplier offer saved."))
         return redirect("part_detail", pk=part.pk)
     return render(request, "parts/part_supplier_offer_form.html", {"form": form, "part": part, "offer": instance})
 
@@ -192,6 +193,6 @@ def part_document_upload(request, part_pk):
         document.uploaded_by = request.user
         document.full_clean()
         document.save()
-        messages.success(request, "Allegato aggiunto alla scheda ricambio.")
+        messages.success(request, _("Attachment added to the part details."))
         return redirect("part_detail", pk=part.pk)
     return render(request, "parts/part_document_form.html", {"form": form, "part": part})
