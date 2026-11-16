@@ -66,14 +66,14 @@ class CustomUserAdmin(UserAdmin):
                 "seniority",
             )
         }),
-        ("Permessi", {
+        ("Permissions", {
             "fields": (
                 "is_active",
                 "is_staff",
                 "is_superuser",
             )
         }),
-        ("Date importanti", {
+        ("Important Dates", {
             "fields": (
                 "last_login",
                 "date_joined",
@@ -87,6 +87,10 @@ class CustomUserAdmin(UserAdmin):
             "fields": (
                 "username",
                 "email",
+                "preferred_language",
+                "department",
+                "specialty",
+                "seniority",
                 "password1",
                 "password2",
                 "is_active",

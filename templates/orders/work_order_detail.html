@@ -1,0 +1,58 @@
+{% extends "base.html" %}
+{% load i18n %}
+{% block title %}{{ order.ro_number }} · {% translate "Work order" %}{% endblock %}
+{% block content %}
+<div class="page-heading">
+    <div>
+        <h2>{{ order.ro_number }} · {{ order.get_status_display }}</h2>
+        <p>{{ order.vehicle|default:_('Vehicle') }} · {{ order.customer|default:order.customer_name|default:"—" }}</p>
+    </div>
+    {% if order.vehicle_id %}<a class="button-link" href="{% url 'fleet:camper_detail' pk=order.vehicle_id %}">{% translate "Vehicle" %}</a>{% else %}<a class="button-link" href="{% url 'orders' %}">{% translate "Work orders" %}</a>{% endif %}
+</div>
+
+<section class="summary-grid">
+    <article class="panel"><strong>{% translate "Work order" %}</strong><p>{{ order.ro_number }}</p><strong>{% translate "Date" %}</strong><p>{{ order.created_at|date:"d/m/Y H:i" }}</p></article>
+    <article class="panel"><strong>{% translate "Customer" %}</strong><p>{{ order.customer|default:order.customer_name|default:"—" }}</p><strong>{% translate "Phone" %}</strong><p>{{ order.customer.phone|default:order.customer_phone|default:"—" }}</p></article>
+    <article class="panel"><strong>{% translate "Vehicle" %}</strong><p>{{ order.vehicle.brand }} {{ order.vehicle.model }}</p><strong>{% translate "Mileage" %}</strong><p>{{ order.odometer|default:"—" }} km</p></article>
+    <article class="panel"><strong>{% translate "Status" %}</strong><p>{{ order.get_status_display }}</p><strong>{% translate "Work classification" %}</strong><p>{{ order.get_work_classification_display }}</p><strong>{% translate "Warranty status" %}</strong><p>{{ order.get_warranty_status_display }}</p><strong>{% translate "Invoicing" %}</strong><p>{% if order.invoiced %}{% translate "Invoiced" %}{% else %}{% translate "Not invoiced" %}{% endif %}</p></article>
+</section>
+
+<section class="panel" style="margin-top:18px">
+    <h3>{% translate "Reception notes" %}</h3>
+    <p>{{ order.reception_notes|default:"—"|linebreaksbr }}</p>
+    <div class="form-grid">
+        <div><strong>{% translate "Checklist" %}</strong>{% if order.checklist %}<ul>{% for item in order.checklist %}<li>{{ item }}</li>{% endfor %}</ul>{% else %}<p>—</p>{% endif %}</div>
+        <div><strong>{% translate "Damages" %}</strong>{% if order.damages %}<ul>{% for item in order.damages %}<li>{{ item }}</li>{% endfor %}</ul>{% else %}<p>—</p>{% endif %}</div>
+    </div>
+</section>
+
+<section class="panel" style="margin-top:18px">
+    <h3>{% translate "Jobs and technicians" %}</h3>
+    {% for job in jobs %}
+        <article style="padding:12px 0;border-bottom:1px solid #d8e0e8">
+            <strong>{{ job.job_number }} · {{ job.title }}</strong> · {{ job.get_status_display }}
+            {% if job.description %}<p>{{ job.description|linebreaksbr }}</p>{% endif %}
+            <p>{% if LANGUAGE_CODE == 'it' %}Reparto{% elif LANGUAGE_CODE == 'es' %}Departamento{% else %}{% translate "Department" %}{% endif %}: {{ job.get_department_display }} · {% if LANGUAGE_CODE == 'it' %}Specialità{% elif LANGUAGE_CODE == 'es' %}Especialidad{% else %}{% translate "Specialty" %}{% endif %}: {{ job.get_specialty_display }} · {% if LANGUAGE_CODE == 'it' %}Durata{% elif LANGUAGE_CODE == 'es' %}Duración{% else %}{% translate "Duration" %}{% endif %}: {{ job.actual_minutes }} min</p>
+            {% with participants=job.participations.all %}{% if participants %}<p>{% translate "Technician" %}: {% for participation in participants %}{{ participation.mechanic.get_full_name|default:participation.mechanic.username }}{% if not forloop.last %}, {% endif %}{% endfor %}</p>{% endif %}{% endwith %}
+            {% for note in job.notes.all %}<p><strong>{{ note.author|default:_('System') }} · {{ note.created_at|date:"d/m/Y H:i" }}:</strong> {{ note.text|linebreaksbr }}</p>{% endfor %}
+            {% for attachment in job.attachments.all %}<p>{% if LANGUAGE_CODE == 'it' %}Allegato{% elif LANGUAGE_CODE == 'es' %}Adjunto{% else %}{% translate "Attachment" %}{% endif %}: <a href="{{ attachment.file.url }}" target="_blank" rel="noopener">{{ attachment.caption|default:attachment.file_name }}</a></p>{% endfor %}
+        </article>
+    {% empty %}<p>—</p>{% endfor %}
+</section>
+
+<section class="panel" style="margin-top:18px">
+    <h3>{% translate "Parts requests" %}</h3>
+    {% for item in parts_requests %}<p><strong>{{ item.part|default:item.custom_item }}</strong> · {{ item.get_status_display }} · {{ item.quantity_requested }} {{ item.unit }}{% if item.quantity_delivered %} / {{ item.quantity_delivered }} {{ item.unit_delivered|default:item.unit }}{% endif %}</p>{% empty %}<p>—</p>{% endfor %}
+</section>
+
+{% if warranty_claims or warranty_returns %}<section class="panel" style="margin-top:18px">
+    <h3>{% translate "Warranties" %}</h3>
+    {% for claim in warranty_claims %}<p><strong>{{ claim.component|default:_('Warranty claim') }}</strong> · {{ claim.get_status_display }} · {{ claim.problem_description }}</p>{% endfor %}
+    {% for item in warranty_returns %}<p><strong>{{ item.part_name }}</strong> · {{ item.get_status_display }} · {{ item.reason }}</p>{% endfor %}
+</section>{% endif %}
+
+{% if attachments %}<section class="panel" style="margin-top:18px">
+    <h3>{% translate "Attachments" %}</h3>
+    <ul>{% for attachment in attachments %}<li>{{ attachment.category.name }} · {{ attachment.caption|default:attachment.file_name }} · <a href="{{ attachment.file.url }}" target="_blank" rel="noopener">{{ attachment.file_name }}</a></li>{% endfor %}</ul>
+</section>{% endif %}
+{% endblock %}

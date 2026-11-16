@@ -4,11 +4,78 @@
 {% block content %}
 <h2>{% translate "New item" %} · {{ title }}</h2>
 <div class="panel"><form method="post" enctype="multipart/form-data">{% csrf_token %}
+    {% if module == "orders" %}
+    <p class="work-order-number-note"><strong>{% translate "Work order number (RO)" %}:</strong> {% if form.instance.pk %}{{ form.instance.ro_number }}{% else %}{% translate "Generated automatically when saved." %}{% endif %}</p>
+    {% endif %}
     {% if form.non_field_errors %}<div class="form-errors">{{ form.non_field_errors }}</div>{% endif %}
     <div class="form-grid">{% for field in form %}<div class="form-field {% if field.field.widget.input_type == 'checkbox' %}checkbox-field{% endif %}">
         <label for="{{ field.id_for_label }}">{{ field.label }}</label>{{ field }}
         {% if field.help_text %}<small>{{ field.help_text }}</small>{% endif %}{% for error in field.errors %}<div class="form-errors">{{ error }}</div>{% endfor %}
-    </div>{% endfor %}</div>
+    </div>
+    {% if module == "orders" and field.name == "vehicle" %}
+    <section class="camper-record-preview full-width" id="camper-record-preview" hidden aria-live="polite">
+        <h3>{% translate "Camper registry data" %}</h3>
+        <dl class="camper-record-grid">
+            <div><dt>{% translate "Internal number" %}</dt><dd data-camper-value="internal-number"></dd></div>
+            <div><dt>{% translate "Plate" %}</dt><dd data-camper-value="plate"></dd></div>
+            <div><dt>{% translate "VIN" %}</dt><dd data-camper-value="vin"></dd></div>
+            <div><dt>{% translate "Owner" %}</dt><dd data-camper-value="owner"></dd></div>
+            <div><dt>{% translate "Phone" %}</dt><dd data-camper-value="owner-phone"></dd></div>
+            <div><dt>{% translate "Email" %}</dt><dd data-camper-value="owner-email"></dd></div>
+            <div><dt>{% translate "First registration" %}</dt><dd data-camper-value="registration-date"></dd></div>
+            <div><dt>{% translate "Make" %} / {% translate "Model" %}</dt><dd data-camper-value="brand-model"></dd></div>
+            <div><dt>{% translate "Engine" %}</dt><dd data-camper-value="engine"></dd></div>
+            <div><dt>{% translate "Fuel type" %}</dt><dd data-camper-value="fuel"></dd></div>
+            <div><dt>{% translate "Transmission" %}</dt><dd data-camper-value="transmission"></dd></div>
+            <div><dt>{% translate "Body equipment" %}</dt><dd data-camper-value="body"></dd></div>
+            <div><dt>{% translate "Seats" %} / {% translate "Sleeping places" %}</dt><dd data-camper-value="capacity"></dd></div>
+            <div><dt>{% translate "Dimensions" %}</dt><dd data-camper-value="dimensions"></dd></div>
+            <div><dt>{% translate "Weights" %}</dt><dd data-camper-value="weights"></dd></div>
+            <div><dt>{% translate "Odometer" %}</dt><dd data-camper-value="mileage"></dd></div>
+            <div><dt>{% translate "Last odometer update" %}</dt><dd data-camper-value="mileage-updated"></dd></div>
+            <div><dt>{% translate "Status" %}</dt><dd data-camper-value="active"></dd></div>
+            <div class="camper-record-notes"><dt>{% translate "Registry notes" %}</dt><dd data-camper-value="notes"></dd></div>
+        </dl>
+    </section>
+    {% endif %}
+    {% endfor %}</div>
     <button type="submit">{% translate "Save" %}</button> <a href="{% url 'fleet:workflow_list' module=module %}">{% translate "Cancel" %}</a>
 </form></div>
+{% if module == "orders" %}
+<script>
+(() => {
+    const camperSelect = document.getElementById("id_vehicle");
+    const preview = document.getElementById("camper-record-preview");
+    if (!camperSelect || !preview) return;
+    const update = () => {
+        const option = camperSelect.selectedOptions[0];
+        if (!option || !option.value) {
+            preview.hidden = true;
+            return;
+        }
+        const get = (name) => option.getAttribute(`data-${name}`) || "—";
+        const fields = ["internal-number", "plate", "vin", "owner", "owner-phone", "owner-email", "registration-date", "engine", "fuel", "transmission", "body", "dimensions", "weights", "mileage", "mileage-updated", "notes", "active"];
+        fields.forEach((key) => {
+            preview.querySelector(`[data-camper-value="${key}"]`).textContent = get(key);
+        });
+        const brand = option.getAttribute("data-brand") || "";
+        const model = option.getAttribute("data-model") || "";
+        preview.querySelector('[data-camper-value="brand-model"]').textContent = [brand, model].filter(Boolean).join(" ") || "—";
+        const engineDetails = option.getAttribute("data-engine-details") || "";
+        preview.querySelector('[data-camper-value="engine"]').textContent = [get("engine"), engineDetails].filter(value => value !== "—").join(" · ") || "—";
+        const seats = option.getAttribute("data-seats") || "—";
+        const beds = option.getAttribute("data-sleeping-places") || "—";
+        preview.querySelector('[data-camper-value="capacity"]').textContent = `${seats} / ${beds}`;
+        for (const field of ["year", "make", "model", "odometer"]) {
+            const input = document.querySelector(`[data-camper-snapshot="${field}"]`);
+            const attribute = field === "make" ? "brand" : field;
+            if (input) input.value = option.getAttribute(`data-${attribute}`) || "";
+        }
+        preview.hidden = false;
+    };
+    camperSelect.addEventListener("change", update);
+    update();
+})();
+</script>
+{% endif %}
 {% endblock %}

@@ -4,7 +4,7 @@ from django.db import models, transaction
 from django.db.models import Count, Sum
 from django.forms import modelform_factory
 from django.core import serializers
-from django.http import Http404, HttpResponse, HttpResponseForbidden
+from django.http import Http404, HttpResponse, HttpResponseForbidden, HttpResponseNotAllowed
 from django.shortcuts import get_object_or_404, redirect, render
 from django.utils import timezone
 from django.utils.translation import gettext_lazy as _
@@ -18,7 +18,7 @@ from .models import (Attachment, AuditLog, Camper, CamperPhoto, DocumentCategory
                      JobNote, JobParticipation, Notification, PartsRequest, TimeEvent, WarrantyClaim,
                      WarrantyReturn)
 from clientandsuppliers.models import CamperOwner
-from orders.models import Job, JobCall, PauseReason, WorkOrder
+from orders.models import Job, JobCall, PauseReason, WorkOrder, next_ro_number
 from parts.models import Part, PartDocument, PartMovement, PartSupplierOffer
 from quotes.models import Quote, QuoteLine
 from parts.views import part_detail, part_document_upload, part_movement, part_supplier_offer
@@ -45,7 +45,9 @@ def _forbidden_for_mechanic(request):
 def camper_list(request):
     if denied := _forbidden_for_mechanic(request): return denied
     workshop = _active_workshop(request.user)
-    campers = Camper.objects.filter(workshop=workshop, is_active=True) if workshop else Camper.objects.none()
+    campers = Camper.objects.filter(workshop=workshop, is_active=True).annotate(
+        photo_count=Count("photos", distinct=True)
+    ) if workshop else Camper.objects.none()
     search = request.GET.get("q", "").strip()
     if search:
         campers = campers.filter(models.Q(plate__icontains=search) | models.Q(vin__icontains=search) |
@@ -105,6 +107,33 @@ def camper_detail(request, pk):
 
 
 @login_required
+def work_order_detail(request, pk):
+    workshop = _active_workshop(request.user)
+    if workshop is None:
+        return redirect("home")
+    order = get_object_or_404(
+        WorkOrder.objects.select_related("customer", "vehicle", "created_by", "invoiced_by").prefetch_related(
+            "jobs__time_events", "jobs__participations__mechanic", "jobs__notes__author",
+            "jobs__attachments__category", "parts_requests__part", "attachments__category",
+            "warranty_claims", "warranty_returns",
+        ),
+        pk=pk,
+        workshop=workshop,
+    )
+    jobs = list(order.jobs.all())
+    for job in jobs:
+        job.actual_minutes = _job_minutes(job)
+    return render(request, "orders/work_order_detail.html", {
+        "order": order,
+        "jobs": jobs,
+        "parts_requests": order.parts_requests.select_related("part"),
+        "attachments": order.attachments.select_related("category"),
+        "warranty_claims": order.warranty_claims.all(),
+        "warranty_returns": order.warranty_returns.all(),
+    })
+
+
+@login_required
 def camper_photo_upload(request, pk):
     if denied := _forbidden_for_mechanic(request): return denied
     workshop = _workshop_or_redirect(request)
@@ -119,6 +148,26 @@ def camper_photo_upload(request, pk):
         messages.success(request, _("Photo saved to the vehicle record."))
         return redirect("fleet:camper_detail", pk=camper.pk)
     return render(request, "fleet/camper_photo_form.html", {"camper": camper, "form": form})
+
+
+@login_required
+def camper_photo_delete(request, pk, photo_pk):
+    if request.method != "POST":
+        return HttpResponseNotAllowed(["POST"])
+    if denied := _forbidden_for_mechanic(request): return denied
+    workshop = _workshop_or_redirect(request)
+    if workshop is None: return redirect("home")
+    camper = get_object_or_404(Camper, pk=pk, workshop=workshop)
+    photo = get_object_or_404(CamperPhoto, pk=photo_pk, camper=camper)
+    _audit(workshop, request.user, "photo_delete", Camper, camper, details=f"Removed photo {photo.caption or photo.image.name}")
+    photo.image.delete(save=False)
+    photo.delete()
+    success_message = {
+        "it": "Foto rimossa dall'anagrafica del veicolo.",
+        "es": "Foto eliminada de la ficha del vehículo.",
+    }.get(request.LANGUAGE_CODE[:2], str(_("Photo removed from the vehicle record.")))
+    messages.success(request, success_message)
+    return redirect("fleet:camper_detail", pk=camper.pk)
 
 
 MODULES = {
@@ -274,7 +323,9 @@ def workflow_list(request, module):
                "status_choices": model._meta.get_field("status").choices if any(f.name == "status" for f in model._meta.fields) else ()}
     if module == "jobs":
         context["mechanics"] = request.user.__class__.objects.filter(memberships__workshop=workshop,
-            memberships__is_active=True, department="technician", is_active=True).distinct()
+            memberships__is_active=True, department="technician", is_active=True).distinct().order_by(
+                "last_name", "first_name", "username"
+            )
         context["pause_reasons"] = PauseReason.objects.filter(is_active=True)
         context["active_job_ids"] = list(JobParticipation.objects.filter(workshop=workshop, mechanic=request.user,
             is_active=True, paused_at__isnull=True).values_list("job_id", flat=True))
@@ -368,7 +419,13 @@ def workflow_create(request, module):
             obj.full_clean()
             obj.full_clean()
             obj.full_clean()
-        obj.save()
+        if isinstance(obj, WorkOrder):
+            with transaction.atomic():
+                Workshop.objects.select_for_update().get(pk=workshop.pk)
+                obj.ro_number = next_ro_number(workshop)
+                obj.save()
+        else:
+            obj.save()
         form.save_m2m()
         if isinstance(obj, JobAssignment) and obj.to_technician_id:
             JobCall.objects.create(workshop=workshop, job=obj.job, mechanic=obj.to_technician, called_by=request.user)
@@ -442,7 +499,7 @@ def job_action(request, pk, action):
 
     if action == "call":
         if _is_mechanic(request.user): return HttpResponseForbidden(_("Only a supervisor can call a technician."))
-        mechanic = get_object_or_404(request.user.__class__, pk=request.POST.get("mechanic"), department="technician", memberships__workshop=workshop, memberships__is_active=True)
+        mechanic = get_object_or_404(request.user.__class__, pk=request.POST.get("mechanic"), department="technician", is_active=True, memberships__workshop=workshop, memberships__is_active=True)
         call, created = JobCall.objects.get_or_create(workshop=workshop, job=job, mechanic=mechanic, accepted_at__isnull=True, dismissed_at__isnull=True,
             defaults={"called_by": request.user})
         if created:
@@ -607,8 +664,8 @@ def workflow_status_action(request, module, pk):
 def work_order_report(request, pk):
     if _is_mechanic(request.user):
         return HttpResponseForbidden(_("The billing report is restricted to office staff."))
-    if request.method != "POST":
-        return redirect("orders")
+    if request.method not in ("GET", "POST"):
+        return HttpResponseNotAllowed(["GET", "POST"])
     workshop = _workshop_or_redirect(request)
     if workshop is None:
         return redirect("home")

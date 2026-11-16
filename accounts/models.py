@@ -54,6 +54,7 @@ class User(AbstractUser):
     LANGUAGE_CHOICES = [
         ("en-us", "English"),
         ("it", "Italiano"),
+        ("es", "Español"),
     ]
     DEPARTMENT_CHOICES = [(v, v.title()) for v in ("reception", "technician", "details", "parts", "warranty", "admin")]
     SPECIALTY_CHOICES = [(v, v.title()) for v in ("interior", "engine", "body", "general", "detailing")]

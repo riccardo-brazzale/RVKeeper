@@ -25,7 +25,7 @@
     </section>
 </div>
 
-<section class="panel">
+<section class="panel" id="vehicle-photos">
     <div class="page-heading">
         <h3>{% translate "Vehicle photos" %}</h3>
         <a class="button-link" href="{% url 'fleet:camper_photo_upload' pk=camper.pk %}">{% translate "Add photo" %}</a>
@@ -38,6 +38,9 @@
                 <img src="{{ photo.image.url }}" alt="{{ photo.caption|default:camper.plate }}" style="width:100%;max-height:240px;object-fit:cover;border-radius:8px">
             </a>
             <figcaption>{{ photo.category.name }} · {{ photo.caption }}</figcaption>
+            <form method="post" action="{% url 'fleet:camper_photo_delete' pk=camper.pk photo_pk=photo.pk %}" onsubmit="return confirm('{% if LANGUAGE_CODE == 'it' %}Rimuovere questa foto?{% elif LANGUAGE_CODE == 'es' %}¿Eliminar esta foto?{% else %}Remove this photo?{% endif %}')" style="margin-top:8px">
+                {% csrf_token %}<button type="submit" class="danger-button">{% if LANGUAGE_CODE == 'it' %}Rimuovi foto{% elif LANGUAGE_CODE == 'es' %}Eliminar foto{% else %}{% translate "Remove photo" %}{% endif %}</button>
+            </form>
         </figure>
         {% endfor %}
     </div>
@@ -55,7 +58,7 @@
             <tbody>
                 {% for order in orders %}
                 <tr>
-                    <td>{{ order.ro_number }}</td>
+                    <td><a href="{% url 'work_order_detail' pk=order.pk %}">{{ order.ro_number }}</a></td>
                     <td>{{ order.created_at|date:"d/m/Y" }}</td>
                     <td>{{ order.get_status_display }}</td>
                     <td>{{ order.odometer|default:"—" }}</td>

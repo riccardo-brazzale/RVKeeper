@@ -4,7 +4,7 @@ msgstr ""
 "Language: it\n"
 "Language-Team: RVKeeper\n"
 "MIME-Version: 1.0\n"
-"PO-Revision-Date: 2026-11-14 11:00+0100\n"
+"PO-Revision-Date: 2026-11-16 00:00+0000\n"
 "Project-Id-Version: RVKeeper\n"
 "Last-Translator: RVKeeper contributors\n"
 "Content-Transfer-Encoding: 8bit\n"
@@ -219,6 +219,33 @@ msgstr "Torna al magazzino"
 
 msgid "Back to sign in"
 msgstr "Torna all'accesso"
+
+msgid "Back"
+msgstr "Indietro"
+
+msgid "Department"
+msgstr "Reparto"
+
+msgid "Specialty"
+msgstr "Specialità"
+
+msgid "Duration"
+msgstr "Durata"
+
+msgid "Warranty claim"
+msgstr "Pratica di garanzia"
+
+msgid "Attachment"
+msgstr "Allegato"
+
+msgid "Photo removed from the vehicle record."
+msgstr "Foto rimossa dall'anagrafica del veicolo."
+
+msgid "Remove photo"
+msgstr "Rimuovi foto"
+
+msgid "Remove this photo?"
+msgstr "Rimuovere questa foto?"
 
 msgid "Both"
 msgstr "Entrambi"
@@ -1008,3 +1035,132 @@ msgstr "Associa un camper a un cliente nel preventivo prima di convertirlo."
 
 msgid "The quote customer must be the selected camper's owner."
 msgstr "Il cliente del preventivo deve essere il proprietario del camper selezionato."
+
+msgid "Call technician"
+msgstr "Chiama il tecnico"
+
+msgid "Code, description or location…"
+msgstr "Codice, descrizione o posizione…"
+
+msgid "Decision note"
+msgstr "Nota della decisione"
+
+msgid "Deleted user"
+msgstr "Utente eliminato"
+
+msgid "Django administration"
+msgstr "Amministrazione Django"
+
+msgid "Django site admin"
+msgstr "Amministrazione del sito Django"
+
+msgid "Email not provided"
+msgstr "Email non indicata"
+
+msgid "Filter by type"
+msgstr "Filtra per tipo"
+
+msgid "Manager"
+msgstr "Responsabile"
+
+msgid "New status"
+msgstr "Nuovo stato"
+
+msgid "Part details and procurement information."
+msgstr "Dettagli del ricambio e informazioni di approvvigionamento."
+
+msgid "Plate, VIN, customer…"
+msgstr "Targa, VIN, cliente…"
+
+msgid "Quote status"
+msgstr "Stato del preventivo"
+
+msgid "System"
+msgstr "Sistema"
+
+msgid "Toggle theme (current theme: auto)"
+msgstr "Cambia tema (tema attuale: automatico)"
+
+msgid "Toggle theme (current theme: dark)"
+msgstr "Cambia tema (tema attuale: scuro)"
+
+msgid "Toggle theme (current theme: light)"
+msgstr "Cambia tema (tema attuale: chiaro)"
+
+msgid "Unassigned"
+msgstr "Non assegnato"
+
+msgid "not started yet"
+msgstr "non ancora iniziato"
+
+msgid "Camper registry data"
+msgstr "Dati anagrafici camper"
+
+msgid "Dimensions"
+msgstr "Dimensioni"
+
+msgid "First registration"
+msgstr "Prima immatricolazione"
+
+msgid "Fuel type"
+msgstr "Alimentazione"
+
+msgid "Generated automatically when saved."
+msgstr "Generato automaticamente al salvataggio."
+
+msgid "Last odometer update"
+msgstr "Ultimo aggiornamento del chilometraggio"
+
+msgid "Make"
+msgstr "Marca"
+
+msgid "Odometer"
+msgstr "Chilometraggio"
+
+msgid "Registry notes"
+msgstr "Note anagrafiche"
+
+msgid "Seats"
+msgstr "Posti"
+
+msgid "Sleeping places"
+msgstr "Posti letto"
+
+msgid "Transmission"
+msgstr "Cambio"
+
+msgid "Weights"
+msgstr "Masse"
+
+msgid "Work order number (RO)"
+msgstr "Numero ordine di lavoro (RO)"
+
+msgid "Checklist"
+msgstr "Checklist"
+
+msgid "Damages"
+msgstr "Danni"
+
+msgid "Reception notes"
+msgstr "Note di accettazione"
+
+msgid "Warranty status"
+msgstr "Stato garanzia"
+
+msgid "Work classification"
+msgstr "Classificazione lavoro"
+
+msgid "Year"
+msgstr "Anno"
+
+msgid "Body equipment"
+msgstr "Allestimento"
+
+msgid "Enter one item per line."
+msgstr "Inserisci un elemento per riga."
+
+msgid "Enter one damage per line."
+msgstr "Inserisci un danno per riga."
+
+msgid "No technician is available: check the department, active account, and active workshop membership."
+msgstr "Nessun meccanico disponibile: verifica reparto Technician, account attivo e appartenenza attiva all'officina."

@@ -43,6 +43,8 @@ Lo script poi:
 
 Al termine gli utenti operativi si creano da **Admin → Accounts → Users**, assegnando ciascuno all'officina tramite una membership. Il superuser iniziale viene creato dal provisioning.
 
+Per comparire nell'elenco **Chiama** delle lavorazioni, un utente deve essere attivo, avere il reparto **Technician** ed essere associato all'officina corrente con una membership attiva. Il livello operativo **Meccanico** da solo non basta: il filtro usa il reparto. Il bootstrap crea il superuser amministrativo, non crea account meccanico. In Admin si può impostare il reparto già durante la creazione dell'utente; dopo averlo salvato, aggiungere una membership attiva per l'officina e assegnare un ruolo.
+
 ## Configurazione e test email
 
 Per abilitare l'invio email dell'applicazione, configurare nel `.env` le variabili `EMAIL_HOST`, `EMAIL_PORT`, `EMAIL_USE_TLS`, `EMAIL_USE_SSL`, `EMAIL_HOST_USER`, `EMAIL_HOST_PASSWORD` e `DEFAULT_FROM_EMAIL`. Il provisioning iniziale lascia il backend email sulla console e i parametri SMTP vuoti: vanno impostati prima di usare l'invio reale. Non inserire password SMTP nella documentazione o in Git; con Gmail usare una password per le app.

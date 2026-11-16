@@ -25,6 +25,7 @@ Questa nota descrive il repository dopo la riprogettazione dello schema. Le migr
 - [[Deployment Linux RVKeeper]]
 - [[#Architettura del codice]]
 - [[#Funzionamento applicativo]]
+- [[Guida operativa - Ordini di lavoro]]
 - [[#Interfaccia smartphone e desktop]]
 - [[#Database e relazioni]]
 - [[Database PostgreSQL RVKeeper]]
@@ -180,6 +181,8 @@ Un preventivo ha numero univoco per officina, cliente, eventuale veicolo, stato 
 La modifica Ã¨ prevista per preventivi in bozza non ancora convertiti. La conversione Ã¨ un POST transazionale: accetta soltanto preventivi approvati non convertiti, crea un ordine di lavoro e genera richieste ricambi dalle righe di tipo ricambio e lavorazioni dalle altre righe. L'ordine e il preventivo vengono collegati e l'operazione Ã¨ registrata nell'audit.
 
 ### Ordini di lavoro e lavorazioni
+
+Per la procedura completa dalla creazione dell’OdL alla presa in carico, gestione delle lavorazioni e chiusura, consulta [[Guida operativa - Ordini di lavoro]].
 
 L'ordine di lavoro (OdL / RO) collega officina, cliente e, facoltativamente, camper. Salva anche una fotografia dei dati cliente/veicolo (nome, contatti, marca/modello e odometro), oltre a classificazione, stato, note di accettazione, checklist e danni. Il numero RO Ã¨ univoco per officina.
 

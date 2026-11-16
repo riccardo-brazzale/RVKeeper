@@ -11,6 +11,10 @@ def work_order_create(request):
     return fleet_views.workflow_create(request, "orders")
 
 
+def work_order_detail(request, pk):
+    return fleet_views.work_order_detail(request, pk)
+
+
 def work_order_status(request, pk):
     return fleet_views.workflow_status_action(request, "orders", pk)
 

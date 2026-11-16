@@ -8,7 +8,7 @@ from django.utils.translation import gettext_lazy as _
 
 from clientandsuppliers.models import CamperOwner
 from fleet.models import AuditLog, Camper, PartsRequest
-from orders.models import Job, WorkOrder
+from orders.models import Job, WorkOrder, next_ro_number
 from parts.models import Part
 from workshops.models import Membership, Workshop
 from .forms import QuoteForm, QuoteLineFormSet
@@ -171,16 +171,13 @@ def quote_to_order(request, pk):
         if vehicle.workshop_id != workshop.pk or customer.pk != quote.customer_id:
             messages.error(request, _("The quote customer must be the selected camper's owner."))
             return redirect("quote_detail", pk=quote.pk)
-        sequence = WorkOrder.objects.filter(workshop=workshop).count() + 1
-        ro_number = f"RO-{timezone.localdate().year}-{sequence:04d}"
-        while WorkOrder.objects.filter(workshop=workshop, ro_number=ro_number).exists():
-            sequence += 1
-            ro_number = f"RO-{timezone.localdate().year}-{sequence:04d}"
+        ro_number = next_ro_number(workshop)
         order = WorkOrder.objects.create(
             workshop=workshop, customer=customer, vehicle=vehicle, ro_number=ro_number,
-            make=vehicle.brand, model=vehicle.model,
+            year=vehicle.registration_date.year if vehicle.registration_date else "",
+            make=vehicle.brand, model=vehicle.model, odometer=vehicle.mileage,
             customer_name=str(customer), customer_phone=customer.phone,
-            customer_email=customer.email, odometer=vehicle.mileage,
+            customer_email=customer.email,
             reception_notes=quote.description, created_by=request.user,
         )
         job_number = 0

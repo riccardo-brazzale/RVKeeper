@@ -24,23 +24,23 @@
         position: sticky;
         top: 0;
         z-index: 30;
-        min-height: 124px;
+        min-height: 232px;
         padding: 8px 28px;
         border-bottom: 1px solid rgba(255,255,255,.1);
         box-shadow: 0 4px 18px rgba(10, 28, 49, .16);
     }
 
-    .brand img { height: 108px; }
+    .brand img { height: 216px; }
     .user-actions { gap: 18px; }
     .user-email { color: #d4e3f2; font-size: 13px; }
 
-    .app-layout { min-height: calc(100vh - 124px); }
+    .app-layout { min-height: calc(100vh - 232px); }
 
     .sidebar {
         position: sticky;
-        top: 124px;
+        top: 232px;
         align-self: flex-start;
-        height: calc(100vh - 124px);
+        height: calc(100vh - 232px);
         flex-basis: 246px;
         padding: 22px 13px;
         background: #132a43;
@@ -155,4 +155,342 @@
 
 @media (max-width: 760px) {
     .spa-progress { display: none; }
+}
+
+.camper-record-preview {
+    margin: 0 0 16px;
+    padding: 14px;
+    border: 1px solid #cbd3dc;
+    border-radius: 6px;
+    background: #f7f9fb;
+}
+
+.camper-record-preview[hidden] { display: none; }
+.camper-record-preview h3 { margin: 0 0 10px; }
+.camper-record-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(190px, 1fr));
+    gap: 8px 14px;
+    margin: 0;
+}
+.camper-record-grid > div { min-width: 0; }
+.camper-record-grid dt { color: #59636b; font-size: 11px; font-weight: 700; }
+.camper-record-grid dd { margin: 2px 0 0; overflow-wrap: anywhere; }
+.camper-record-grid .camper-record-notes { grid-column: 1 / -1; }
+.work-order-number-note { margin: 0 0 14px; color: #435970; }
+.empty-mechanics { max-width: 260px; color: #8b4a13; font-size: 11px; }
+
+/* Desktop workstation: compact, high-contrast industrial records UI. */
+@media (min-width: 1024px) {
+    :root {
+        --rv-ink: #20262b;
+        --rv-muted: #59636b;
+        --rv-line: #aeb4b9;
+        --rv-surface: #f0f0f0;
+        --rv-canvas: #d7dadd;
+        --rv-accent: #c96b16;
+        --rv-shadow: none;
+    }
+
+    body {
+        color: var(--rv-ink);
+        background: #d7dadd;
+        font-family: "Arial Narrow", Arial, sans-serif;
+        font-size: 13px;
+    }
+
+    .app-header {
+        min-height: 116px;
+        padding: 3px 18px;
+        background: #252b30;
+        border-bottom: 1px solid #111518;
+        box-shadow: 0 2px 5px rgba(0,0,0,.2);
+    }
+    .brand img { height: 108px; max-width: 420px; }
+    .user-actions { gap: 12px; font-size: 12px; }
+    .user-email { color: #d4d9dc; }
+    .user-actions > a { color: #f0a04e; }
+    .app-header form button { padding: 7px 11px; }
+
+    .app-layout { min-height: calc(100vh - 116px); }
+    .sidebar {
+        position: sticky;
+        top: 116px;
+        height: calc(100vh - 116px);
+        flex: 0 0 226px;
+        padding: 12px 9px;
+        background: #30373d;
+        border-right: 1px solid #171b1e;
+        box-shadow: 2px 0 5px rgba(0,0,0,.13);
+    }
+    .sidebar-label {
+        margin: 14px 7px 5px;
+        padding: 0 0 4px 7px;
+        border-left: 2px solid #55f58a;
+        border-bottom: 1px solid #4b545b;
+        color: #55f58a;
+        font-family: Consolas, "Courier New", monospace;
+        font-size: 10px;
+        letter-spacing: .08em;
+        text-shadow: none;
+    }
+    .sidebar-label:first-child { margin-top: 2px; }
+    .sidebar nav { gap: 1px; }
+    .sidebar nav a {
+        padding: 7px 9px;
+        border: 1px solid transparent;
+        border-radius: 2px;
+        color: #e2e5e7;
+        font-size: 12px;
+        transition: background .12s ease, border-color .12s ease;
+    }
+    .sidebar nav a:hover,
+    .sidebar nav a[aria-current="page"] {
+        transform: none;
+        border-color: #59636b;
+        background: #414a51;
+        box-shadow: inset 3px 0 #e58a37;
+        color: #fff;
+    }
+
+    .workspace {
+        min-width: 0;
+        min-height: calc(100vh - 62px);
+        padding: 15px 18px 12px;
+    }
+    main { max-width: none; }
+    .page-heading {
+        min-height: 42px;
+        margin-bottom: 12px;
+        padding: 0 0 8px;
+        border-bottom: 1px solid #aeb4b9;
+    }
+    .page-heading h2,
+    main > h2 {
+        color: #1e3b66;
+        font-family: Consolas, "Courier New", monospace;
+        font-size: 19px;
+        font-weight: 600;
+        letter-spacing: 0;
+    }
+    .page-heading p { margin: 4px 0 0; color: #545e65; font-size: 12px; }
+
+    .panel {
+        margin-bottom: 12px;
+        padding: 15px;
+        border: 1px solid #aeb4b9;
+        border-radius: 2px;
+        background: #eeeeee;
+        background-image: none;
+        box-shadow: none;
+    }
+    .panel h3 {
+        margin: 0 0 10px;
+        color: #153b8a;
+        font-family: Consolas, "Courier New", monospace;
+        font-size: 15px;
+        font-weight: 500;
+    }
+    .panel > .page-heading {
+        min-height: 32px;
+        margin: -2px 0 8px;
+        padding: 0 0 6px;
+    }
+    .panel > .page-heading h3 { margin: 0; }
+
+    .summary-grid { gap: 8px; margin-bottom: 12px; }
+    .summary-grid .panel {
+        min-height: 92px;
+        padding: 12px;
+        border-radius: 2px;
+        transition: none;
+    }
+    .summary-grid .panel:hover { transform: none; box-shadow: none; }
+    .summary-grid .panel::after { display: none; }
+    .summary-grid .panel > strong { color: #505b63; font-size: 10px; }
+    .metric { color: #1e3b66; font-family: Consolas, "Courier New", monospace; font-size: 27px; }
+
+    .table-wrap { overflow: auto; border: 1px solid #aeb4b9; border-radius: 0; }
+    table {
+        width: 100%;
+        background: #ededed;
+        font-family: Consolas, "Courier New", monospace;
+        font-size: 11px;
+    }
+    th, td {
+        padding: 4px 7px;
+        border-right: 1px solid #c2c6c9;
+        border-bottom: 1px solid #b8bdc1;
+        text-align: left;
+        vertical-align: middle;
+    }
+    th {
+        position: sticky;
+        top: 0;
+        z-index: 1;
+        background: #dfe2e4;
+        color: #20262b;
+        font-family: Arial, sans-serif;
+        font-size: 10px;
+        font-weight: 600;
+        letter-spacing: 0;
+        text-transform: none;
+        white-space: nowrap;
+    }
+    td { white-space: nowrap; }
+    tbody tr:nth-child(even) { background: #e5e6e7; }
+    tbody tr:hover { background: #fff1df; }
+    td a { color: #0645ad; text-decoration: underline; }
+
+    .form-grid { grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 0 12px; }
+    .form-field {
+        display: grid;
+        grid-template-columns: minmax(94px, .42fr) minmax(0, 1fr);
+        align-items: center;
+        gap: 7px;
+        margin-bottom: 6px;
+    }
+    .form-field label {
+        margin: 0;
+        color: #20262b;
+        font-family: Consolas, "Courier New", monospace;
+        font-size: 12px;
+        font-weight: 500;
+    }
+    .form-field input,
+    .form-field select,
+    .form-field textarea,
+    .actions input,
+    .actions select,
+    td input,
+    td select {
+        min-width: 0;
+        min-height: 27px;
+        padding: 4px 6px;
+        border: 1px solid #aeb4b9;
+        border-radius: 1px !important;
+        background: #fff;
+        color: #073b9a;
+        font-family: Consolas, "Courier New", monospace;
+        font-size: 12px;
+    }
+    .form-field input:focus,
+    .form-field select:focus,
+    .form-field textarea:focus,
+    .actions input:focus,
+    .actions select:focus {
+        outline: 1px solid #e58a37;
+        border-color: #e58a37;
+        box-shadow: none;
+    }
+    .form-field textarea { min-height: 72px; }
+    .form-field small { grid-column: 2; color: #59636b; }
+    .form-grid .full-width { grid-column: 1 / -1; }
+    .form-errors, .messages { border: 1px solid #d8a15d; border-radius: 2px; }
+    .camper-record-preview {
+        margin: 0 0 8px;
+        padding: 10px;
+        border-color: #aeb4b9;
+        border-radius: 1px;
+        background: #e7e8e8;
+    }
+    .camper-record-preview h3 {
+        margin: 0 0 8px;
+        color: #153b8a;
+        font-family: Consolas, "Courier New", monospace;
+        font-size: 13px;
+    }
+    .camper-record-grid { grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 5px 10px; }
+    .camper-record-grid dt { color: #46525b; font-family: Consolas, "Courier New", monospace; font-size: 10px; }
+    .camper-record-grid dd { color: #073b9a; font-family: Consolas, "Courier New", monospace; font-size: 11px; }
+    .work-order-number-note {
+        margin: 0 0 10px;
+        padding: 7px 9px;
+        border-left: 3px solid #e58a37;
+        background: #e7e8e8;
+        color: #28343b;
+        font-family: Consolas, "Courier New", monospace;
+        font-size: 12px;
+    }
+    .empty-mechanics {
+        display: inline-block;
+        max-width: 245px;
+        padding: 4px 6px;
+        border: 1px solid #d5b38e;
+        background: #f8e7cf;
+        color: #633708;
+        font-family: Consolas, "Courier New", monospace;
+        font-size: 10px;
+        white-space: normal;
+    }
+
+    button,
+    .button-link {
+        min-height: 29px;
+        padding: 6px 11px;
+        border: 1px solid #a45b19;
+        border-radius: 2px;
+        background: #c96b16;
+        box-shadow: none;
+        font-size: 12px;
+        font-weight: 600;
+    }
+    button:hover,
+    .button-link:hover { background: #a95710; }
+    .actions { gap: 5px; }
+    .actions input, .actions select { max-width: 220px; }
+    .badge { border: 1px solid #c8a273; border-radius: 2px; background: #f8e7cf; color: #633708; }
+    .notification-list li { border-color: #b8bdc1; }
+    footer { padding: 8px; color: #59636b; text-shadow: none; font-size: 10px; }
+}
+
+/* Collegamento rapido alle immagini del camper dalla lista del parco mezzi. */
+.photo-link {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    padding: 5px 9px;
+    border: 1px solid #aeb4b9;
+    border-radius: 3px;
+    color: #4c5964;
+    font-weight: 700;
+    text-decoration: none;
+    white-space: nowrap;
+}
+.photo-link.has-photos {
+    border-color: #208449;
+    background: #dff5e7;
+    color: #126331;
+}
+.photo-link.no-photos { color: #59636b; }
+@media (min-width: 761px) and (max-width: 1023px) {
+    #vehicle-photos { scroll-margin-top: 244px; }
+}
+@media (min-width: 1024px) {
+    #vehicle-photos { scroll-margin-top: 128px; }
+}
+@media (min-width: 1024px) {
+    .sidebar-label { font-size: 15px !important; }
+    .sidebar nav a { font-size: 18px !important; }
+    .form-field label { font-size: 19.5px !important; }
+}
+@media (min-width: 761px) and (max-width: 1023px) {
+    .sidebar-label { font-size: 18px !important; }
+    .sidebar nav a { font-size: 19.5px !important; }
+    .form-field label { font-size: 24px !important; }
+}
+@media (max-width: 760px) {
+    .app-header { min-height: 192px; }
+    .app-layout { min-height: calc(100vh - 192px); }
+    .sidebar { inset: 192px auto 0 0; }
+    .menu-backdrop.is-visible { inset: 192px 0 0; }
+    .sidebar-label { font-size: 18px !important; }
+    .sidebar nav a { font-size: 22.5px !important; }
+    .form-field label { font-size: 24px !important; }
+}
+@media (max-width: 420px) {
+    .app-header { min-height: 168px; }
+    .app-layout { min-height: calc(100vh - 168px); }
+    .sidebar { inset: 168px auto 0 0; }
+    .menu-backdrop.is-visible { inset: 168px 0 0; }
 }

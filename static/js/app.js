@@ -1,6 +1,24 @@
 (() => {
     const desktop = window.matchMedia('(min-width: 761px)');
     const path = window.location.pathname;
+    const sameOriginReferrer = (() => {
+        try { return Boolean(document.referrer) && new URL(document.referrer).origin === window.location.origin; }
+        catch { return false; }
+    })();
+    const canGoBack = () => window.history.length > 1 &&
+        (sameOriginReferrer || window.history.state?.rvkeeperCanGoBack === true);
+    const updateBackButton = (root = document) => {
+        const backRow = root.querySelector('[data-back-row]');
+        if (backRow) backRow.hidden = !canGoBack();
+    };
+    updateBackButton();
+    document.addEventListener('click', (event) => {
+        const backLink = event.target.closest('[data-back-button]');
+        if (!backLink || event.defaultPrevented || event.button !== 0 || event.metaKey || event.ctrlKey || event.shiftKey || event.altKey) return;
+        if (!canGoBack()) return;
+        event.preventDefault();
+        window.history.back();
+    });
     // Il pannello admin mantiene il proprio comportamento e layout Django.
     if (!desktop.matches || path.startsWith('/admin/')) return;
 
@@ -48,10 +66,18 @@
 
             content.replaceChildren(...[...nextContent.childNodes].map((node) => document.importNode(node, true)));
             document.title = nextDocument.title || document.title;
-            if (push) window.history.pushState({}, '', response.url || requestedUrl);
+            const destination = new URL(response.url || requestedUrl, window.location.href);
+            const requested = new URL(requestedUrl, window.location.href);
+            if (requested.hash) destination.hash = requested.hash;
+            if (push) window.history.pushState({ rvkeeperCanGoBack: true }, '', destination.href);
+            updateBackButton(content);
             setActiveLink();
             content.focus({ preventScroll: true });
-            window.scrollTo({ top: 0, behavior: 'instant' });
+            if (destination.hash) {
+                window.requestAnimationFrame(() => document.getElementById(decodeURIComponent(destination.hash.slice(1)))?.scrollIntoView({ block: 'start' }));
+            } else {
+                window.scrollTo({ top: 0, behavior: 'instant' });
+            }
             document.dispatchEvent(new CustomEvent('rvkeeper:page-loaded'));
             return true;
     };

@@ -1,6 +1,22 @@
 from django.core.exceptions import ValidationError
 from django.db import models
 from django.utils.translation import gettext_lazy as _
+from django.utils import timezone
+
+
+def next_ro_number(workshop):
+    """Return the next workshop-scoped repair order number.
+
+    Callers creating an order should lock the Workshop row in a transaction so
+    concurrent order creation is serialized.
+    """
+    year = timezone.localdate().year
+    sequence = WorkOrder.objects.filter(workshop=workshop).count() + 1
+    number = f"RO-{year}-{sequence:04d}"
+    while WorkOrder.objects.filter(workshop=workshop, ro_number=number).exists():
+        sequence += 1
+        number = f"RO-{year}-{sequence:04d}"
+    return number
 
 
 class PauseReason(models.Model):
