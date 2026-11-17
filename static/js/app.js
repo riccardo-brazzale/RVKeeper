@@ -86,6 +86,61 @@
         const searchInput = select.closest('.form-field')?.querySelector('input[data-part-search]');
         if (searchInput) filterPartOptions(searchInput);
     });
+    const notificationStack = document.querySelector('[data-notification-feed-url]');
+    if (notificationStack) {
+        let notificationCursor = Number(notificationStack.dataset.afterId || 0);
+        let hasLoggedNotificationError = false;
+        const updateUnreadCount = (count) => {
+            document.querySelectorAll('[data-notification-count]').forEach((badge) => {
+                badge.textContent = count > 99 ? '99+' : String(count);
+                badge.hidden = count < 1;
+            });
+        };
+        const showNotification = (item) => {
+            const toast = document.createElement('a');
+            toast.className = 'notification-toast';
+            const requestedUrl = item.link || notificationStack.dataset.notificationPageUrl;
+            const target = new URL(requestedUrl, window.location.href);
+            toast.href = target.origin === window.location.origin
+                ? target.href
+                : notificationStack.dataset.notificationPageUrl;
+            const title = document.createElement('strong');
+            title.textContent = item.title;
+            toast.append(title);
+            if (item.body) {
+                const body = document.createElement('span');
+                body.textContent = item.body;
+                toast.append(body);
+            }
+            notificationStack.append(toast);
+            window.setTimeout(() => toast.remove(), 12000);
+        };
+        const pollNotifications = async () => {
+            if (document.visibilityState === 'hidden') return;
+            try {
+                const url = new URL(notificationStack.dataset.notificationFeedUrl, window.location.href);
+                url.searchParams.set('after', String(notificationCursor));
+                const response = await fetch(url.href, { credentials: 'same-origin' });
+                if (!response.ok) throw new Error(`Notification feed returned ${response.status}`);
+                const data = await response.json();
+                updateUnreadCount(Number(data.unread_count) || 0);
+                for (const item of data.notifications || []) {
+                    showNotification(item);
+                }
+                notificationCursor = Math.max(notificationCursor, Number(data.cursor) || 0);
+                hasLoggedNotificationError = false;
+            } catch (error) {
+                if (!hasLoggedNotificationError) {
+                    console.error('Unable to update RVKeeper notifications.', error);
+                    hasLoggedNotificationError = true;
+                }
+            }
+        };
+        pollNotifications();
+        window.setInterval(pollNotifications, 15000);
+        document.addEventListener('visibilitychange', pollNotifications);
+        document.addEventListener('rvkeeper:page-loaded', pollNotifications);
+    }
     // Il pannello admin mantiene il proprio comportamento e layout Django.
     if (!desktop.matches || path.startsWith('/admin/')) return;
 

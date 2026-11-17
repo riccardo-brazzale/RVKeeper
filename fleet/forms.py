@@ -10,6 +10,11 @@ from parts.forms import PartDocumentForm, PartSupplierOfferForm
 from parts.models import Part
 
 
+class CustomerChoiceField(forms.ModelChoiceField):
+    def label_from_instance(self, contact):
+        return f"{contact.customer_code} · {contact}" if contact.customer_code else str(contact)
+
+
 class CamperForm(forms.ModelForm):
     class Meta:
         model = Camper
@@ -22,7 +27,12 @@ class CamperForm(forms.ModelForm):
 
     def __init__(self, *args, workshop, **kwargs):
         super().__init__(*args, **kwargs)
-        self.fields["owner"].queryset = CamperOwner.objects.filter(workshop=workshop, kind__in=("customer", "both"))
+        owner_queryset = CamperOwner.objects.filter(workshop=workshop, kind__in=("customer", "both"))
+        self.fields["owner"] = CustomerChoiceField(
+            queryset=owner_queryset,
+            required=True,
+            label=self.fields["owner"].label,
+        )
         self.fields["owner"].required = True
 
 
@@ -40,7 +50,7 @@ class CamperSelect(forms.Select):
                 "internal-number": camper.internal_number,
                 "plate": camper.plate,
                 "vin": camper.vin,
-                "owner": str(owner) if owner else "",
+                "owner": f"{owner.customer_code} · {owner}" if owner and owner.customer_code else str(owner) if owner else "",
                 "owner-phone": owner.phone if owner else "",
                 "owner-email": owner.email if owner else "",
                 "brand": camper.brand,
@@ -70,7 +80,9 @@ class CamperSelect(forms.Select):
 
 class CamperChoiceField(forms.ModelChoiceField):
     def label_from_instance(self, camper):
-        return f"{camper} · {camper.owner}"
+        owner = camper.owner
+        owner_label = f"{owner.customer_code} · {owner}" if owner and owner.customer_code else str(owner or "")
+        return f"{camper} · {owner_label}"
 
 
 class LineListField(forms.CharField):

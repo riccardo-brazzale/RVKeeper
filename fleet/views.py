@@ -1,10 +1,11 @@
 from django.contrib import messages
+from django.contrib.auth import get_user_model
 from django.contrib.auth.decorators import login_required
 from django.db import models, transaction
 from django.db.models import Count, Sum
 from django.forms import modelform_factory
 from django.core import serializers
-from django.http import Http404, HttpResponse, HttpResponseForbidden, HttpResponseNotAllowed
+from django.http import Http404, HttpResponse, HttpResponseForbidden, HttpResponseNotAllowed, JsonResponse
 from django.shortcuts import get_object_or_404, redirect, render
 from django.utils import timezone
 from django.utils.translation import gettext_lazy as _
@@ -27,6 +28,9 @@ from quotes.models import Quote, QuoteLine
 from parts.views import part_detail, part_document_upload, part_movement, part_supplier_offer
 
 
+CUSTOMER_APPROVAL_THRESHOLD = Decimal("100.00")
+
+
 def _active_workshop(user):
     membership = Membership.objects.filter(
         user=user, is_active=True, workshop__is_active=True
@@ -42,6 +46,98 @@ def _forbidden_for_mechanic(request):
     if _is_mechanic(request.user):
         return HttpResponseForbidden(_("Your profile can only access work orders and parts."))
     return None
+
+
+def _can_manage_parts(user):
+    return user.is_superuser or user.department in ("parts", "admin")
+
+
+def _can_approve_parts(user):
+    return user.is_superuser or user.department in ("reception", "admin")
+
+
+def _notify_department(workshop, department, title, body, link, work_order):
+    recipients = list(get_user_model().objects.filter(
+        department=department,
+        is_active=True,
+        memberships__workshop=workshop,
+        memberships__is_active=True,
+    ).distinct())
+    notifications = [
+        Notification(
+            workshop=workshop,
+            user=recipient,
+            title=str(title),
+            body=body,
+            link=link,
+            work_order=work_order,
+        )
+        for recipient in recipients
+    ]
+    if notifications:
+        Notification.objects.bulk_create(notifications)
+    else:
+        Notification.objects.create(
+            workshop=workshop,
+            title=str(title),
+            body=body,
+            link=link,
+            work_order=work_order,
+        )
+
+
+def _notify_requester(item, title, body):
+    if item.requested_by_id:
+        Notification.objects.create(
+            workshop=item.workshop,
+            user=item.requested_by,
+            title=str(title),
+            body=body,
+            link="/lavori/miei/",
+            work_order=item.work_order,
+        )
+
+
+def _parts_request_quote(part, quantity):
+    if not part:
+        return None
+    return (part.sale_price * quantity).quantize(Decimal("0.01"))
+
+
+def _set_initial_parts_request_status(item):
+    quote = _parts_request_quote(item.part, item.quantity_requested)
+    item.customer_quoted_price = quote
+    item.status = "pending"
+    item.approval_status = (
+        "awaiting_customer"
+        if quote is not None and quote > CUSTOMER_APPROVAL_THRESHOLD
+        else "not_required"
+    )
+
+
+def _notify_new_parts_requests(requests):
+    customer_approval_requests = [item for item in requests if item.approval_status == "awaiting_customer"]
+    warehouse_requests = [item for item in requests if item.approval_status == "not_required"]
+    for items, department, title in (
+        (customer_approval_requests, "reception", _("Customer approval required")),
+        (warehouse_requests, "parts", _("Parts requested from a job")),
+    ):
+        if not items:
+            continue
+        first = items[0]
+        job_label = f" · {first.job.title}" if first.job_id else ""
+        details = ", ".join(
+            f"{item.part} ({item.customer_quoted_price} {item.workshop.currency})"
+            for item in items
+        )
+        _notify_department(
+            first.workshop,
+            department,
+            title,
+            f"{first.work_order.ro_number}{job_label} · {details}",
+            "/richieste-ricambi/",
+            first.work_order,
+        )
 
 
 @login_required
@@ -176,7 +272,14 @@ def camper_photo_delete(request, pk, photo_pk):
 MODULES = {
     "orders": (WorkOrder, _("Work orders"), ("ro_number", "vehicle", "customer", "customer_phone", "status", "completed_at", "invoiced")),
     "jobs": (Job, _("Jobs and technicians"), ("work_order", "title", "department", "status")),
-    "requests": (PartsRequest, _("Parts requests"), ("work_order", "part", "supplier_offer", "custom_item", "quantity_requested", "status")),
+    "requests": (
+        PartsRequest,
+        _("Parts requests"),
+        (
+            "work_order", "part", "supplier_offer", "custom_item", "quantity_requested",
+            "status", "approval_status", "customer_quoted_price", "repair_minutes",
+        ),
+    ),
     "claims": (WarrantyClaim, _("Warranty claims"), ("work_order", "component", "problem_description", "status")),
     "returns": (WarrantyReturn, _("Warranty returns"), ("work_order", "part_name", "quantity", "status")),
     "attachments": (Attachment, _("Attachments"), ("work_order", "category", "file_name", "caption", "uploaded_by", "created_at")),
@@ -186,7 +289,12 @@ MODULES = {
 FORM_EXCLUDES = {
     WorkOrder: ("workshop", "status", "created_by", "completed_at", "invoiced", "invoiced_at", "invoiced_by", "created_at", "updated_at"),
     Job: ("workshop", "status", "started_at", "completed_at", "created_at", "updated_at"),
-    PartsRequest: ("workshop", "requested_by", "quantity_delivered", "purchase_price", "delivered_at", "delivered_by", "inventory_applied", "created_at", "updated_at"),
+    PartsRequest: (
+        "workshop", "requested_by", "quantity_delivered", "purchase_price", "delivered_at",
+        "delivered_by", "inventory_applied", "status", "approval_status",
+        "customer_approval_recorded_at", "customer_approval_recorded_by", "approval_decided_at",
+        "approval_decided_by", "created_at", "updated_at",
+    ),
     WarrantyClaim: ("workshop", "requested_by", "decided_by", "decided_at", "created_at", "updated_at"),
     WarrantyReturn: ("workshop", "requested_by", "decided_by", "decided_at", "created_at"),
     Attachment: ("workshop", "file_name", "uploaded_by", "created_at"),
@@ -321,7 +429,10 @@ def workflow_list(request, module):
     headers = {
         "orders": (_("Work order"), _("Camper"), _("Customer"), _("Customer phone"), _("Status"), _("Closed at"), _("Invoicing")),
         "jobs": (_("Work order"), _("Job"), _("Technician"), _("Status")),
-        "requests": (_("Work order"), _("Part"), _("Supplier / price"), _("Custom item"), _("Requested quantity"), _("Status")),
+        "requests": (
+            _("Work order"), _("Part"), _("Supplier / price"), _("Custom item"),
+            _("Requested quantity"), _("Warehouse status"), _("Approval"), _("Customer quote"), _("Repair minutes"),
+        ),
         "claims": (_("Work order"), _("Component"), _("Problem description"), _("Status")),
         "returns": (_("Work order"), _("Part"), _("Quantity"), _("Status")),
         "attachments": (_("Work order"), _("Category"), _("File name"), _("Description"), _("Uploaded by"), _("Date")),
@@ -330,11 +441,16 @@ def workflow_list(request, module):
     }
     column_headers = headers.get(module, columns)
     if module == "requests" and _is_mechanic(request.user):
-        column_headers = (_("Work order"), _("Part"), _("Custom item"), _("Requested quantity"), _("Status"))
+        column_headers = (
+            _("Work order"), _("Part"), _("Custom item"), _("Requested quantity"),
+            _("Warehouse status"), _("Approval"), _("Customer quote"), _("Repair minutes"),
+        )
     if module == "orders" and _is_mechanic(request.user):
         column_headers = (_("Work order number"), _("Camper"), _("Customer"), _("Phone"), _("Status"), _("Closed at"))
     context = {"module": module, "title": title, "objects": objects, "columns": columns, "headers": column_headers, "display_rows": display_rows, "model": model,
                "status_choices": model._meta.get_field("status").choices if any(f.name == "status" for f in model._meta.fields) else ()}
+    context["can_manage_parts"] = _can_manage_parts(request.user)
+    context["can_approve_parts"] = _can_approve_parts(request.user)
     if module == "jobs":
         context["mechanics"] = request.user.__class__.objects.filter(memberships__workshop=workshop,
             memberships__is_active=True, department="technician", is_active=True).distinct().order_by(
@@ -363,8 +479,10 @@ def workflow_create(request, module):
         return redirect("home")
     model, title = _module(module)[:2]
     exclude = FORM_EXCLUDES[model]
-    if model is PartsRequest and _is_mechanic(request.user):
-        exclude = exclude + ("supplier", "supplier_offer")
+    if model is PartsRequest:
+        exclude = exclude + ("customer_quoted_price", "repair_minutes")
+        if _is_mechanic(request.user):
+            exclude = exclude + ("supplier", "supplier_offer")
     if model is WorkOrder:
         initial = {}
         vehicle_id = request.GET.get("vehicle")
@@ -407,7 +525,9 @@ def workflow_create(request, module):
                 return render(request, "fleet/workflow_form.html", {"form": form, "title": title, "module": module})
         obj.workshop = workshop
         if isinstance(obj, WorkOrder): obj.created_by = request.user
-        if isinstance(obj, PartsRequest): obj.requested_by = request.user
+        if isinstance(obj, PartsRequest):
+            obj.requested_by = request.user
+            _set_initial_parts_request_status(obj)
         if isinstance(obj, PartsRequest) and obj.supplier_offer_id:
             obj.supplier = str(obj.supplier_offer.supplier)
             obj.purchase_price = obj.supplier_offer.net_purchase_price
@@ -443,6 +563,8 @@ def workflow_create(request, module):
         else:
             obj.save()
         form.save_m2m()
+        if isinstance(obj, PartsRequest):
+            _notify_new_parts_requests([obj])
         if isinstance(obj, JobAssignment) and obj.to_technician_id:
             JobCall.objects.create(workshop=workshop, job=obj.job, mechanic=obj.to_technician, called_by=request.user)
             Notification.objects.create(workshop=workshop, user=obj.to_technician, title="Chiamata su lavorazione",
@@ -467,10 +589,25 @@ def workflow_edit(request, module, pk):
     if workshop is None: return redirect("home")
     model, title = _module(module)[:2]
     obj = get_object_or_404(model, pk=pk, workshop=workshop)
+    original_parts_values = None
+    if isinstance(obj, PartsRequest):
+        if obj.status in ("delivered", "cancelled"):
+            messages.error(request, _("Delivered or rejected requests cannot be edited."))
+            return redirect("fleet:workflow_list", module=module)
+        original_parts_values = (
+            obj.customer_quoted_price,
+            obj.repair_minutes,
+            obj.part_id,
+            obj.quantity_requested,
+            obj.approval_status,
+        )
     if model is WorkOrder:
         form = WorkOrderForm(request.POST or None, instance=obj, workshop=workshop)
     else:
-        Form = modelform_factory(model, exclude=FORM_EXCLUDES[model])
+        exclude = FORM_EXCLUDES[model]
+        if isinstance(obj, PartsRequest) and not _can_approve_parts(request.user):
+            exclude = exclude + ("customer_quoted_price", "repair_minutes")
+        Form = modelform_factory(model, exclude=exclude)
         form = Form(request.POST or None, request.FILES or None, instance=obj)
     for field in form.fields.values():
         if hasattr(field, "queryset"):
@@ -490,12 +627,55 @@ def workflow_edit(request, module, pk):
             elif model is PartsRequest and related_model is PartSupplierOffer:
                 field.queryset = related_model.objects.filter(part__workshop=workshop).select_related("part", "supplier")
     if request.method == "POST" and form.is_valid():
+        changed_fields = set(form.changed_data)
         obj = form.save(commit=False)
+        approval_terms_changed = False
+        if isinstance(obj, PartsRequest) and original_parts_values is not None:
+            previous_quote, previous_minutes, previous_part_id, previous_quantity, previous_approval_status = original_parts_values
+            if "customer_quoted_price" not in changed_fields and (
+                "part" in changed_fields or "quantity_requested" in changed_fields
+            ):
+                obj.customer_quoted_price = _parts_request_quote(obj.part, obj.quantity_requested)
+            approval_terms_changed = (
+                obj.customer_quoted_price != previous_quote
+                or obj.repair_minutes != previous_minutes
+                or obj.part_id != previous_part_id
+                or obj.quantity_requested != previous_quantity
+            )
+            if approval_terms_changed:
+                approval_required = (
+                    previous_approval_status != "not_required"
+                    or (
+                        obj.customer_quoted_price is not None
+                        and obj.customer_quoted_price > CUSTOMER_APPROVAL_THRESHOLD
+                    )
+                )
+                obj.approval_status = "awaiting_customer" if approval_required else "not_required"
+                obj.customer_approval_recorded_at = None
+                obj.customer_approval_recorded_by = None
+                obj.approval_decided_at = None
+                obj.approval_decided_by = None
+                obj.status = "pending"
         if isinstance(obj, PartsRequest) and obj.supplier_offer_id:
             obj.supplier = str(obj.supplier_offer.supplier)
             obj.purchase_price = obj.supplier_offer.net_purchase_price
-        obj.save()
-        form.save_m2m()
+        with transaction.atomic():
+            obj.save()
+            form.save_m2m()
+            if approval_terms_changed and obj.approval_status == "awaiting_customer":
+                body = (
+                    f"{obj.work_order.ro_number} · {obj.part or obj.custom_item} · "
+                    f"{obj.customer_quoted_price} {workshop.currency} · {obj.repair_minutes} min"
+                )
+                _notify_department(
+                    workshop,
+                    "reception",
+                    _("Customer approval required"),
+                    body,
+                    "/richieste-ricambi/",
+                    obj.work_order,
+                )
+                _notify_requester(obj, _("Request terms updated"), body)
         if isinstance(obj, Attachment) and "file" in request.FILES:
             obj.file_name = obj.file.name
             obj.save(update_fields=("file_name",))
@@ -664,7 +844,7 @@ def job_parts_request(request, pk):
             if not data or data.get("DELETE") or not (data.get("part") or data.get("custom_item")):
                 continue
             part = data["part"]
-            item = PartsRequest.objects.create(
+            item = PartsRequest(
                 workshop=workshop,
                 work_order=job.work_order,
                 job=job,
@@ -674,34 +854,12 @@ def job_parts_request(request, pk):
                 notes=data.get("notes", "").strip(),
                 requested_by=request.user,
             )
+            _set_initial_parts_request_status(item)
+            item.save()
             requests.append(item)
             _audit(workshop, request.user, "create", PartsRequest, item)
 
-        recipients = request.user.__class__.objects.filter(
-            department="parts",
-            is_active=True,
-            memberships__workshop=workshop,
-            memberships__is_active=True,
-        ).distinct()
-        notification_body = f"{job.work_order.ro_number} · {job.title} · {len(requests)}"
-        if recipients.exists():
-            for recipient in recipients:
-                Notification.objects.create(
-                    workshop=workshop,
-                    user=recipient,
-                    title=str(_("Parts requested from a job")),
-                    body=notification_body,
-                    link="/richieste-ricambi/",
-                    work_order=job.work_order,
-                )
-        else:
-            Notification.objects.create(
-                workshop=workshop,
-                title=str(_("Parts requested from a job")),
-                body=notification_body,
-                link="/richieste-ricambi/",
-                work_order=job.work_order,
-            )
+        _notify_new_parts_requests(requests)
 
     messages.success(request, _("Parts request sent to the warehouse."))
     return redirect("my_jobs")
@@ -829,29 +987,172 @@ def job_complete(request, pk):
 
 @login_required
 def parts_request_action(request, pk, action):
-    if _forbidden_for_mechanic(request): return _forbidden_for_mechanic(request)
+    if request.method != "POST":
+        return HttpResponseNotAllowed(["POST"])
     workshop = _workshop_or_redirect(request)
-    if workshop is None: return redirect("home")
-    if request.method == "POST" and action == "deliver":
-        with transaction.atomic():
-            item = get_object_or_404(PartsRequest.objects.select_for_update(), pk=pk, workshop=workshop)
-            qty = item.quantity_delivered or item.quantity_requested
-            if item.part_id and not item.inventory_applied:
-                part = Part.objects.select_for_update().get(pk=item.part_id, workshop=workshop)
-                if part.quantity < qty * item.conversion_factor:
-                    messages.error(request, _("Insufficient stock: the issue was not recorded."))
-                    return redirect("fleet:workflow_list", module="requests")
-                part.quantity -= qty * item.conversion_factor
-                part.save(update_fields=("quantity", "updated_at"))
-                PartMovement.objects.create(workshop=workshop, part=part, work_order=item.work_order,
-                    movement_type="out", quantity=qty * item.conversion_factor, unit_cost=part.cost_price,
-                    note=f"Prelievo richiesta #{item.pk}", created_by=request.user)
-            item.inventory_applied = True
-            if item.status != "delivered":
+    if workshop is None:
+        return redirect("home")
+
+    warehouse_actions = {"prepare", "hold", "resume", "ready", "deliver"}
+    approval_actions = {"customer_approved", "customer_rejected", "approve", "reject"}
+    if action in warehouse_actions and not _can_manage_parts(request.user):
+        return HttpResponseForbidden(_("Only warehouse staff can update warehouse requests."))
+    if action in approval_actions and not _can_approve_parts(request.user):
+        return HttpResponseForbidden(_("Only reception can update customer approvals."))
+    if action not in warehouse_actions | approval_actions:
+        raise Http404
+
+    with transaction.atomic():
+        item = get_object_or_404(
+            PartsRequest.objects.select_for_update().select_related(
+                "part", "requested_by", "work_order"
+            ),
+            pk=pk,
+            workshop=workshop,
+        )
+        if action in warehouse_actions:
+            if item.approval_status not in ("not_required", "approved"):
+                messages.error(request, _("Customer approval must be completed before warehouse processing."))
+                return redirect("fleet:workflow_list", module="requests")
+            if action == "prepare" and item.status in ("new", "pending"):
+                item.status = "preparing"
+                item.save(update_fields=("status", "updated_at"))
+                _audit(workshop, request.user, "prepare", PartsRequest, item)
+            elif action == "hold" and item.status in ("new", "pending", "preparing"):
+                item.status = "on_hold"
+                item.save(update_fields=("status", "updated_at"))
+                _audit(workshop, request.user, "hold", PartsRequest, item)
+                _notify_requester(
+                    item,
+                    _("Part request on hold"),
+                    f"{item.work_order.ro_number} · {item.part or item.custom_item} · "
+                    f"{_('The warehouse does not currently have this part.')}",
+                )
+            elif action == "resume" and item.status == "on_hold":
+                item.status = "pending"
+                item.save(update_fields=("status", "updated_at"))
+                _audit(workshop, request.user, "resume", PartsRequest, item)
+                _notify_requester(
+                    item,
+                    _("Part request resumed"),
+                    f"{item.work_order.ro_number} · {item.part or item.custom_item}",
+                )
+            elif action == "ready" and item.status == "preparing":
+                item.status = "ready_for_pickup"
+                item.save(update_fields=("status", "updated_at"))
+                _audit(workshop, request.user, "ready", PartsRequest, item)
+                _notify_requester(
+                    item,
+                    _("Parts ready for pickup"),
+                    f"{item.work_order.ro_number} · {item.part or item.custom_item}",
+                )
+            elif action == "deliver" and item.status == "ready_for_pickup":
+                qty = item.quantity_delivered or item.quantity_requested
+                if item.part_id and not item.inventory_applied:
+                    part = Part.objects.select_for_update().get(pk=item.part_id, workshop=workshop)
+                    if part.quantity < qty * item.conversion_factor:
+                        messages.error(request, _("Insufficient stock: the issue was not recorded."))
+                        return redirect("fleet:workflow_list", module="requests")
+                    part.quantity -= qty * item.conversion_factor
+                    part.save(update_fields=("quantity", "updated_at"))
+                    PartMovement.objects.create(
+                        workshop=workshop,
+                        part=part,
+                        work_order=item.work_order,
+                        movement_type="out",
+                        quantity=qty * item.conversion_factor,
+                        unit_cost=part.cost_price,
+                        note=f"Prelievo richiesta #{item.pk}",
+                        created_by=request.user,
+                    )
+                item.inventory_applied = True
                 item.quantity_delivered = qty
+                item.unit_delivered = item.unit
                 item.status, item.delivered_at, item.delivered_by = "delivered", timezone.now(), request.user
+                item.save()
                 _audit(workshop, request.user, "deliver", PartsRequest, item)
-            item.save()
+                _notify_requester(
+                    item,
+                    _("Parts delivered"),
+                    f"{item.work_order.ro_number} · {item.part or item.custom_item}",
+                )
+            else:
+                messages.error(request, _("This warehouse action is not valid for the current request status."))
+                return redirect("fleet:workflow_list", module="requests")
+        elif action == "customer_approved" and item.approval_status == "awaiting_customer":
+            item.approval_status = "pending"
+            item.customer_approval_recorded_at = timezone.now()
+            item.customer_approval_recorded_by = request.user
+            item.save(update_fields=(
+                "approval_status", "customer_approval_recorded_at",
+                "customer_approval_recorded_by", "updated_at",
+            ))
+            _audit(workshop, request.user, "customer_approved", PartsRequest, item)
+            _notify_department(
+                workshop,
+                "reception",
+                _("Customer approval recorded"),
+                f"{item.work_order.ro_number} · {item.part or item.custom_item}",
+                "/richieste-ricambi/",
+                item.work_order,
+            )
+        elif action == "customer_rejected" and item.approval_status == "awaiting_customer":
+            item.approval_status = "rejected"
+            item.status = "cancelled"
+            item.approval_decided_at = timezone.now()
+            item.approval_decided_by = request.user
+            item.save(update_fields=(
+                "approval_status", "status", "approval_decided_at",
+                "approval_decided_by", "updated_at",
+            ))
+            _audit(workshop, request.user, "customer_rejected", PartsRequest, item)
+            _notify_requester(
+                item,
+                _("Customer declined the part request"),
+                f"{item.work_order.ro_number} · {item.part or item.custom_item}",
+            )
+        elif action == "approve" and item.approval_status == "pending":
+            item.approval_status = "approved"
+            item.status = "pending"
+            item.approval_decided_at = timezone.now()
+            item.approval_decided_by = request.user
+            item.save(update_fields=(
+                "approval_status", "status", "approval_decided_at",
+                "approval_decided_by", "updated_at",
+            ))
+            _audit(workshop, request.user, "approve", PartsRequest, item)
+            _notify_department(
+                workshop,
+                "parts",
+                _("Approved request ready for warehouse"),
+                f"{item.work_order.ro_number} · {item.part or item.custom_item}",
+                "/richieste-ricambi/",
+                item.work_order,
+            )
+            _notify_requester(
+                item,
+                _("Part request approved"),
+                f"{item.work_order.ro_number} · {item.part or item.custom_item}",
+            )
+        elif action == "reject" and item.approval_status == "pending":
+            item.approval_status = "rejected"
+            item.status = "cancelled"
+            item.approval_decided_at = timezone.now()
+            item.approval_decided_by = request.user
+            item.save(update_fields=(
+                "approval_status", "status", "approval_decided_at",
+                "approval_decided_by", "updated_at",
+            ))
+            _audit(workshop, request.user, "reject", PartsRequest, item)
+            _notify_requester(
+                item,
+                _("Part request rejected"),
+                f"{item.work_order.ro_number} · {item.part or item.custom_item}",
+            )
+        else:
+            messages.error(request, _("This approval action is not valid for the current request status."))
+            return redirect("fleet:workflow_list", module="requests")
+
     return redirect("fleet:workflow_list", module="requests")
 
 
@@ -861,6 +1162,8 @@ def workflow_status_action(request, module, pk):
         return _forbidden_for_mechanic(request)
     workshop = _workshop_or_redirect(request)
     if workshop is None: return redirect("home")
+    if module == "requests":
+        return HttpResponseForbidden(_("Use the warehouse and approval actions to change a parts request."))
     model = {"orders": WorkOrder, "requests": PartsRequest, "claims": WarrantyClaim, "returns": WarrantyReturn}.get(module)
     if model is None or request.method != "POST": return redirect("home")
     obj = get_object_or_404(model, pk=pk, workshop=workshop)
@@ -1118,6 +1421,42 @@ def notifications(request):
     if workshop is None: return redirect("home")
     items = Notification.objects.filter(workshop=workshop).filter(models.Q(user=request.user) | models.Q(user__isnull=True))
     return render(request, "fleet/notifications.html", {"items": items})
+
+
+@login_required
+def notifications_feed(request):
+    if request.method != "GET":
+        return HttpResponseNotAllowed(["GET"])
+    workshop = _workshop_or_redirect(request)
+    if workshop is None:
+        return JsonResponse({"error": "No active workshop."}, status=400)
+    try:
+        after_id = max(0, int(request.GET.get("after", "0")))
+    except (TypeError, ValueError):
+        return JsonResponse({"error": "Invalid notification cursor."}, status=400)
+
+    visible = Notification.objects.filter(workshop=workshop).filter(
+        models.Q(user=request.user) | models.Q(user__isnull=True)
+    )
+    latest_id = visible.order_by("-pk").values_list("pk", flat=True).first() or 0
+    unread_count = visible.filter(read=False).count()
+    new_items = list(
+        visible.filter(read=False, pk__gt=after_id).order_by("pk")[:20]
+    )
+    cursor = new_items[-1].pk if len(new_items) == 20 else max(after_id, latest_id)
+    return JsonResponse({
+        "unread_count": unread_count,
+        "cursor": cursor,
+        "notifications": [
+            {
+                "id": item.pk,
+                "title": item.title,
+                "body": item.body,
+                "link": item.link,
+            }
+            for item in new_items
+        ],
+    })
 
 
 @login_required

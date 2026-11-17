@@ -12,7 +12,7 @@ from orders.models import Job, PauseReason, WorkOrder
 from parts.models import Part, PartMovement
 from workshops.models import Membership, Role, Workshop
 
-from .forms import WorkOrderForm
+from .forms import CamperForm, WorkOrderForm
 from .models import Camper, JobPartUsage, JobParticipation, Notification, PartsRequest, TimeEvent
 
 
@@ -58,12 +58,30 @@ class PopulateDemoDataCommandTests(TestCase):
             7,
         )
         self.assertEqual(PartMovement.objects.filter(workshop=self.workshop).count(), 13)
+        demo_customer = CamperOwner.objects.get(
+            workshop=self.workshop,
+            email="emily.carter@contacts.example",
+        )
+        self.assertIn("Profilo demo fittizio", demo_customer.notes)
+        demo_part = Part.objects.get(workshop=self.workshop, part_number="DEMO-PART-001")
+        self.assertEqual(demo_part.sale_price, Decimal("14.16"))
+        self.assertIn("amsoil.com", demo_part.description)
         stock_before_rerun = dict(
             Part.objects.filter(workshop=self.workshop).values_list("pk", "quantity")
         )
 
+        demo_customer.notes = "Old demo note"
+        demo_customer.save(update_fields=("notes",))
+        demo_part.name = "Old demo name"
+        demo_part.sale_price = Decimal("999.99")
+        demo_part.save(update_fields=("name", "sale_price"))
         self._run_command()
 
+        demo_customer.refresh_from_db()
+        demo_part.refresh_from_db()
+        self.assertIn("Profilo demo fittizio", demo_customer.notes)
+        self.assertEqual(demo_part.name, "Engine oil filter")
+        self.assertEqual(demo_part.sale_price, Decimal("14.16"))
         self.assertEqual(Part.objects.filter(workshop=self.workshop).count(), 1000)
         self.assertEqual(WorkOrder.objects.filter(workshop=self.workshop).count(), 10)
         self.assertEqual(Job.objects.filter(workshop=self.workshop).count(), 30)
@@ -103,6 +121,7 @@ class WorkOrderFormTests(TestCase):
                 "ro_number": "RO-2026-0001",
                 "vehicle": str(self.camper.pk),
                 "work_classification": "customer_pay",
+                "tariff_type": "standard",
                 "warranty_status": "not_applicable",
             },
             workshop=self.workshop,
@@ -118,6 +137,13 @@ class WorkOrderFormTests(TestCase):
         self.assertEqual(order.customer, self.customer)
         self.assertEqual(order.customer_name, str(self.customer))
         self.assertEqual(form.fields["vehicle"].queryset.count(), 2)
+        self.assertIn(self.customer.customer_code, str(form["vehicle"]))
+
+    def test_customer_code_is_shown_when_selecting_a_contact_for_a_camper(self):
+        self.assertEqual(self.customer.customer_code, f"CLI-{self.customer.pk:06d}")
+        form = CamperForm(workshop=self.workshop)
+
+        self.assertIn(self.customer.customer_code, str(form["owner"]))
 
     def test_work_order_requires_a_camper(self):
         form = WorkOrderForm(

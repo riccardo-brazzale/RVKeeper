@@ -28,7 +28,7 @@
         <table>
             <thead>
                 <tr>
-                    <th>{% translate "Type" %}</th><th>{% translate "Contact" %}</th><th>{% translate "Phone" %}</th><th>{% translate "Email" %}</th>
+                    <th>{% translate "Type" %}</th><th>{% translate "Customer code" %}</th><th>{% translate "Contact" %}</th><th>{% translate "Phone" %}</th><th>{% translate "Email" %}</th>
                     <th>{% translate "VAT number" %}</th><th>{% translate "City" %}</th><th></th>
                 </tr>
             </thead>
@@ -36,6 +36,7 @@
                 {% for contact in contacts %}
                 <tr>
                     <td>{{ contact.get_kind_display }}</td>
+                    <td>{{ contact.customer_code|default:"—" }}</td>
                     <td>{{ contact }}</td>
                     <td>{{ contact.phone|default:"—" }}</td>
                     <td>{{ contact.email|default:"—" }}</td>

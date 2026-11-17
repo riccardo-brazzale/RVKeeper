@@ -5,7 +5,7 @@
 <div class="page-heading">
     <div>
         <h2>{{ camper.brand }} {{ camper.model }} · {{ camper.plate|default:camper.internal_number }}</h2>
-        <p>{% translate "Vehicle" %} {{ camper.internal_number }} · {% translate "Owner" %}: {{ camper.owner|default:_("Unassigned") }}</p>
+        <p>{% translate "Vehicle" %} {{ camper.internal_number }} · {% translate "Owner" %}: {% if camper.owner.customer_code %}{{ camper.owner.customer_code }} · {% endif %}{{ camper.owner|default:_("Unassigned") }}</p>
     </div>
     <div class="actions">
         <a class="button-link" href="{% url 'order_create' %}?vehicle={{ camper.pk }}">{% translate "Open work order" %}</a>

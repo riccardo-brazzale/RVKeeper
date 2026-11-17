@@ -2,7 +2,8 @@
 {% load i18n %}
 {% block title %}{{ contact }} · {% translate "Documents" %}{% endblock %}
 {% block content %}
-<div class="page-heading"><div><h2>{{ contact }}</h2><p>{{ contact.get_kind_display }} · {{ contact.phone|default:_("Phone not provided") }} · {{ contact.email|default:_("Email not provided") }}</p></div><a class="button-link" href="{% url 'customer_edit' pk=contact.pk %}">{% translate "Edit contact" %}</a></div>
+<div class="page-heading"><div><h2>{{ contact }}</h2><p>{% if contact.customer_code %}{% translate "Customer code" %}: <strong>{{ contact.customer_code }}</strong> · {% endif %}{{ contact.get_kind_display }} · {{ contact.phone|default:_("Phone not provided") }} · {{ contact.email|default:_("Email not provided") }}</p></div><a class="button-link" href="{% url 'customer_edit' pk=contact.pk %}">{% translate "Edit contact" %}</a></div>
+{% if contact.notes %}<section class="panel"><h3>{% translate "Notes" %}</h3><p>{{ contact.notes|linebreaksbr }}</p></section>{% endif %}
 {% if contact.is_customer %}
 <section class="panel"><div class="page-heading"><h3>{% translate "Campers" %}</h3><a class="button-link" href="{% url 'fleet:camper_create' %}?owner={{ contact.pk }}">{% translate "Add camper" %}</a></div>
 {% if campers %}<div class="table-wrap"><table><thead><tr><th>{% translate "Internal number" %}</th><th>{% translate "Plate" %}</th><th>{% translate "Model" %}</th><th>{% translate "Status" %}</th></tr></thead><tbody>

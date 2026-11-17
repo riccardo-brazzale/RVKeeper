@@ -2,6 +2,7 @@
 from django.db import models
 from django.db.models import Q
 from django.core.exceptions import ValidationError
+from django.utils.translation import gettext_lazy as _
 class DocumentCategory(models.Model):
     """Categorie di documenti gestite dall'amministrazione."""
     code = models.SlugField(max_length=50, unique=True)
@@ -312,7 +313,22 @@ class CamperPhoto(models.Model):
 
 
 class PartsRequest(models.Model):
-    STATUS_CHOICES = [(v, v.replace("_", " ").title()) for v in ("new", "pending", "preparing", "ready_for_pickup", "delivered", "cancelled")]
+    STATUS_CHOICES = [
+        ("new", _("New")),
+        ("pending", _("Pending")),
+        ("preparing", _("Preparing")),
+        ("on_hold", _("On hold")),
+        ("ready_for_pickup", _("Ready for pickup")),
+        ("delivered", _("Delivered")),
+        ("cancelled", _("Cancelled")),
+    ]
+    APPROVAL_STATUS_CHOICES = [
+        ("not_required", _("Not required")),
+        ("awaiting_customer", _("Awaiting customer approval")),
+        ("pending", _("Waiting for reception decision")),
+        ("approved", _("Approved")),
+        ("rejected", _("Rejected")),
+    ]
     workshop = models.ForeignKey("workshops.Workshop", on_delete=models.CASCADE, related_name="parts_requests")
     work_order = models.ForeignKey("orders.WorkOrder", on_delete=models.CASCADE, related_name="parts_requests")
     job = models.ForeignKey("orders.Job", on_delete=models.SET_NULL, null=True, blank=True, related_name="parts_requests")
@@ -325,6 +341,35 @@ class PartsRequest(models.Model):
     quantity_delivered = models.DecimalField(max_digits=12, decimal_places=2, default=0)
     conversion_factor = models.DecimalField(max_digits=12, decimal_places=4, default=1)
     repair_minutes = models.PositiveIntegerField(default=0)
+    customer_quoted_price = models.DecimalField(
+        max_digits=12,
+        decimal_places=2,
+        null=True,
+        blank=True,
+        verbose_name=_("Customer quoted total"),
+    )
+    approval_status = models.CharField(
+        max_length=25,
+        choices=APPROVAL_STATUS_CHOICES,
+        default="not_required",
+        verbose_name=_("Customer approval"),
+    )
+    customer_approval_recorded_at = models.DateTimeField(null=True, blank=True)
+    customer_approval_recorded_by = models.ForeignKey(
+        "accounts.User",
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name="customer_approvals_recorded",
+    )
+    approval_decided_at = models.DateTimeField(null=True, blank=True)
+    approval_decided_by = models.ForeignKey(
+        "accounts.User",
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name="parts_approvals_decided",
+    )
     notes = models.TextField(blank=True)
     supplier = models.CharField(max_length=200, blank=True)
     purchase_price = models.DecimalField(max_digits=12, decimal_places=2, null=True, blank=True, verbose_name="Prezzo d'acquisto concordato")

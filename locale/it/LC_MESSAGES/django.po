@@ -304,6 +304,9 @@ msgstr "Crea ordine di lavoro"
 msgid "Customer"
 msgstr "Cliente"
 
+msgid "Customer code"
+msgstr "Codice cliente"
+
 msgid "Customers"
 msgstr "Clienti"
 

@@ -57,6 +57,10 @@ class CamperOwner(models.Model):
         return self.company_name if self.is_company else f"{self.first_name} {self.last_name}".strip()
 
     @property
+    def customer_code(self):
+        return f"CLI-{self.pk:06d}" if self.pk and self.is_customer else ""
+
+    @property
     def is_customer(self):
         return self.kind in ("customer", "both")
 

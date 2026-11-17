@@ -18,6 +18,7 @@ DEMO_WORK_ORDER_COUNT = 10
 DEMO_JOB_COUNT = 30
 DEMO_PART_REQUEST_COUNT = 20
 CLOSED_WORK_ORDER_COUNT = 3
+PRICE_BENCHMARKS_AS_OF = date(2026, 11, 17)
 
 CONTACTS = [
     {
@@ -82,20 +83,82 @@ CONTACTS = [
     },
 ]
 
-PARTS = [
-    ("DEMO-PART-001", "Engine oil filter", "Spin-on oil filter for sample motorhome service", "each", "8.50", "15.00", 20, 5, "A-01"),
-    ("DEMO-PART-002", "Engine air filter", "Replacement air filter, medium chassis", "each", "18.00", "32.00", 25, 6, "A-02"),
-    ("DEMO-PART-003", "Diesel fuel filter", "Water-separating diesel filter cartridge", "each", "24.00", "42.00", 18, 4, "A-03"),
-    ("DEMO-PART-004", "Serpentine belt", "Accessory drive belt for demo engine platform", "each", "29.00", "49.00", 8, 2, "A-04"),
-    ("DEMO-PART-005", "12V water pump", "Fresh water diaphragm pump, 3.0 GPM", "each", "76.00", "119.00", 5, 2, "B-01"),
-    ("DEMO-PART-006", "Fresh water filter", "Inline sediment filter cartridge", "each", "12.00", "21.00", 14, 4, "B-02"),
-    ("DEMO-PART-007", "House battery 100Ah", "12V deep-cycle lithium house battery", "each", "385.00", "529.00", 3, 1, "B-03"),
-    ("DEMO-PART-008", "Roof air conditioner", "Low-profile 13.5k BTU rooftop cooling unit", "each", "895.00", "1249.00", 2, 1, "C-01"),
-    ("DEMO-PART-009", "Awning drive motor", "12V replacement motor for powered awning", "each", "142.00", "219.00", 4, 1, "C-02"),
-    ("DEMO-PART-010", "Brake pad kit", "Front axle brake pad set, demonstration stock", "set", "58.00", "94.00", 7, 2, "C-03"),
-    ("DEMO-PART-011", "RV roof sealant", "Self-leveling sealant, 10 oz tube", "tube", "8.00", "14.00", 30, 10, "D-01"),
-    ("DEMO-PART-012", "LED marker light", "Amber 12V exterior clearance lamp", "each", "6.50", "12.00", 16, 5, "D-02"),
-]
+CUSTOMER_NOTES = (
+    "Profilo demo fittizio: proprietario di camper; preferisce ricevere un preventivo scritto prima dei lavori.",
+    "Profilo demo fittizio: viaggiatore stagionale; chiede aggiornamenti via email e un orario di ritiro concordato.",
+    "Profilo demo fittizio: famiglia con camper; desidera una spiegazione chiara delle riparazioni consigliate.",
+    "Profilo demo fittizio: viaggiatore di lunga percorrenza; privilegia manutenzione preventiva e fattura dettagliata.",
+    "Profilo demo fittizio: proprietario locale; preferisce un contatto telefonico per gli aggiornamenti urgenti.",
+)
+
+DEMO_PART_PROFILES = (
+    {
+        "name": "Engine oil filter",
+        "description": "Filtro olio a cartuccia avvitabile per la manutenzione del motore; verificare la compatibilità prima dell'ordine.",
+        "unit": "each",
+        "price": Decimal("14.16"),
+        "benchmark": "media di quattro prezzi retail pubblicati: $8.95, $10.60, $13.84 e $23.25",
+        "source": "https://www.amsoil.com/c/car-truck-heavy-duty-oil-filters/41/",
+        "quantity": 20,
+        "min_stock": 5,
+        "location": "A-01",
+    },
+    {
+        "name": "12V fresh-water pump",
+        "description": "Pompa a membrana 12 V per l'impianto dell'acqua potabile; verificare portata, pressione e raccordi.",
+        "unit": "each",
+        "price": Decimal("151.24"),
+        "benchmark": "media di quattro prezzi pubblicati per pompe RV: $89.99, $124.99, $129.99 e $259.99",
+        "source": "https://unitedrvparts.com/collections/water-pumps",
+        "quantity": 5,
+        "min_stock": 2,
+        "location": "B-01",
+    },
+    {
+        "name": "100Ah LiFePO4 house battery",
+        "description": "Batteria servizi LiFePO4 12 V 100 Ah; verificare dimensioni, BMS e compatibilità di ricarica.",
+        "unit": "each",
+        "price": Decimal("950.00"),
+        "benchmark": "valore centrale dell'intervallo pubblicato $700-$1,200 per una batteria RV al litio da 100 Ah",
+        "source": "https://rvshare.com/blog/pick-best-rv-battery-read/",
+        "quantity": 3,
+        "min_stock": 1,
+        "location": "B-03",
+    },
+    {
+        "name": "100Ah AGM house battery",
+        "description": "Batteria servizi AGM 12 V 100 Ah; verificare disposizione dei terminali, dimensioni e profilo di ricarica.",
+        "unit": "each",
+        "price": Decimal("250.00"),
+        "benchmark": "valore centrale dell'intervallo pubblicato $200-$300 per una batteria RV AGM da 100 Ah",
+        "source": "https://rvshare.com/blog/pick-best-rv-battery-read/",
+        "quantity": 4,
+        "min_stock": 1,
+        "location": "B-04",
+    },
+    {
+        "name": "Powered awning replacement motor",
+        "description": "Motore di ricambio 12 V per tendalino elettrico; verificare marca e modello prima dell'installazione.",
+        "unit": "each",
+        "price": Decimal("215.01"),
+        "benchmark": "prezzo pubblicato da eTrailer per un motore di ricambio per tendalino RV",
+        "source": "https://www.etrailer.com/search/awning+motor+replacement",
+        "quantity": 4,
+        "min_stock": 1,
+        "location": "C-02",
+    },
+    {
+        "name": "Self-leveling RV roof sealant",
+        "description": "Tubo da 10,3 oz di sigillante autolivellante per giunzioni e raccordi compatibili del tetto RV.",
+        "unit": "tube",
+        "price": Decimal("10.50"),
+        "benchmark": "prezzo pubblicato da Camping World per un tubo Dicor da 10,3 oz",
+        "source": "https://www.campingworld.com/dicor-self-leveling-lap-sealant-10.3-oz.-tube-white-32125.html",
+        "quantity": 30,
+        "min_stock": 10,
+        "location": "D-01",
+    },
+)
 
 CAMPER_MODELS = [
     "Trailwind 21", "Mesa Touring 24", "Redwood Class C 26", "High Desert 28",
@@ -121,21 +184,25 @@ def generated_customer_contacts():
 
 
 def generated_parts():
-    yield from PARTS
-    units = ("each", "set", "tube", "liter", "pack")
-    for index in range(len(PARTS) + 1, DEMO_PART_COUNT + 1):
-        cost = Decimal(5 + index % 1500)
-        sale = (cost * Decimal("1.4")).quantize(Decimal("0.01"))
+    for index in range(1, DEMO_PART_COUNT + 1):
+        profile = DEMO_PART_PROFILES[(index - 1) % len(DEMO_PART_PROFILES)]
+        variant = f" - demo variant {index:04d}" if index > len(DEMO_PART_PROFILES) else ""
+        benchmark_note = (
+            f" Riferimento prezzo demo del {PRICE_BENCHMARKS_AS_OF.isoformat()}: "
+            f"{profile['benchmark']}. Fonte: {profile['source']}. "
+            "Prezzo dimostrativo: verificare compatibilità e costo aggiornato del fornitore. "
+            "Il riferimento retail è riportato sia nel costo sia nel prezzo di vendita."
+        )
         yield (
             f"DEMO-PART-{index:03d}",
-            f"Demo service part {index:04d}",
-            f"Fictional demo catalog item {index:04d} for workshop testing.",
-            units[index % len(units)],
-            str(cost),
-            str(sale),
-            8 + index % 20,
-            2 + index % 5,
-            f"DEMO-{(index - 1) // 100 + 1:02d}-{index % 100:02d}",
+            f"{profile['name']}{variant}",
+            f"{profile['description']}{benchmark_note}",
+            profile["unit"],
+            str(profile["price"]),
+            str(profile["price"]),
+            profile["quantity"] + index % 20,
+            profile["min_stock"],
+            profile["location"] if index <= len(DEMO_PART_PROFILES) else f"DEMO-{(index - 1) // 100 + 1:02d}-{index % 100:02d}",
         )
 
 
@@ -184,6 +251,7 @@ class Command(BaseCommand):
         }
         demo_customer_emails.update(row["email"] for row in generated_customer_contacts())
         with transaction.atomic():
+            customer_profile_index = 0
             for row in (*CONTACTS, *generated_customer_contacts()):
                 data = dict(row)
                 is_company = data.pop("is_company", False)
@@ -191,13 +259,19 @@ class Command(BaseCommand):
                     **data,
                     "is_company": is_company,
                     "country": "US",
-                    "notes": "Fictional sample record generated for testing.",
+                    "notes": "Fictional sample supplier record generated for testing.",
                 }
+                if row["kind"] in ("customer", "both"):
+                    defaults["notes"] = CUSTOMER_NOTES[customer_profile_index % len(CUSTOMER_NOTES)]
+                    customer_profile_index += 1
                 contact, created = CamperOwner.objects.get_or_create(
                     workshop=workshop,
                     email=row["email"],
                     defaults=defaults,
                 )
+                if not created and contact.is_customer and contact.notes != defaults["notes"]:
+                    contact.notes = defaults["notes"]
+                    contact.save(update_fields=("notes",))
                 contact.full_clean()
                 counts["contacts"] += int(created)
                 counts["customers"] += int(created and contact.is_customer)
@@ -214,21 +288,33 @@ class Command(BaseCommand):
             parts = []
             for index, row in enumerate(generated_parts(), start=1):
                 number, name, description, unit, cost, sale, quantity, min_stock, location = row
+                defaults = {
+                    "name": name,
+                    "description": description,
+                    "unit": unit,
+                    "cost_price": cost,
+                    "sale_price": sale,
+                    "standard_minutes": 20,
+                    "quantity": quantity,
+                    "min_stock": min_stock,
+                    "location": location,
+                }
                 part, created = Part.objects.get_or_create(
                     workshop=workshop,
                     part_number=number,
-                    defaults={
-                        "name": name,
-                        "description": description,
-                        "unit": unit,
-                        "cost_price": cost,
-                        "sale_price": sale,
-                        "standard_minutes": 20,
-                        "quantity": quantity,
-                        "min_stock": min_stock,
-                        "location": location,
-                    },
+                    defaults=defaults,
                 )
+                if not created:
+                    updated_fields = []
+                    for field_name in (
+                        "name", "description", "unit", "cost_price", "sale_price",
+                        "standard_minutes", "min_stock", "location",
+                    ):
+                        if getattr(part, field_name) != defaults[field_name]:
+                            setattr(part, field_name, defaults[field_name])
+                            updated_fields.append(field_name)
+                    if updated_fields:
+                        part.save(update_fields=(*updated_fields, "updated_at"))
                 part.full_clean()
                 counts["parts"] += int(created)
                 parts.append(part)
@@ -246,6 +332,9 @@ class Command(BaseCommand):
                         "is_preferred": True,
                     },
                 )
+                if not offer_created and offer.purchase_price != cost:
+                    offer.purchase_price = cost
+                    offer.save(update_fields=("purchase_price", "updated_at"))
                 offer.full_clean()
                 counts["offers"] += int(offer_created)
 

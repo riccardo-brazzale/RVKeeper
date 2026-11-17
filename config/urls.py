@@ -90,6 +90,7 @@ urlpatterns = [
     path("allegati/nuovo/", fleet_views.workflow_create, {"module": "attachments"}, name="attachment_create"),
     path("report/", fleet_views.report, name="report"),
     path("notifiche/", fleet_views.notifications, name="notifications"),
+    path("notifiche/aggiornamenti/", fleet_views.notifications_feed, name="notifications_feed"),
     path("notifiche/lette/", fleet_views.mark_notifications_read, name="notifications_read"),
     path("registro-attivita/", fleet_views.audit_log, name="audit_log"),
     path("esporta-dati/", fleet_views.data_export, name="data_export"),
