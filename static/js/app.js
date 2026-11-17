@@ -19,6 +19,73 @@
         event.preventDefault();
         window.history.back();
     });
+    document.addEventListener('click', (event) => {
+        const addButton = event.target.closest('[data-formset-add]');
+        if (addButton) {
+            const formset = addButton.closest('[data-formset]');
+            const totalForms = formset?.querySelector('input[name$="-TOTAL_FORMS"]');
+            const template = formset?.querySelector('template[data-formset-empty]');
+            const rows = formset?.querySelector('[data-formset-rows]');
+            if (!totalForms || !template || !rows) return;
+            const index = Number(totalForms.value);
+            rows.insertAdjacentHTML('beforeend', template.innerHTML.replace(/__prefix__/g, String(index)));
+            totalForms.value = String(index + 1);
+            return;
+        }
+        const removeButton = event.target.closest('[data-formset-remove]');
+        if (!removeButton) return;
+        const row = removeButton.closest('[data-formset-row]');
+        const deleteField = row?.querySelector('input[name$="-DELETE"]');
+        if (deleteField) {
+            deleteField.checked = true;
+            row.hidden = true;
+        }
+    });
+    document.addEventListener('submit', (event) => {
+        const form = event.target;
+        if (!(form instanceof HTMLFormElement) || !form.dataset.confirm) return;
+        if (!window.confirm(form.dataset.confirm)) event.preventDefault();
+    });
+    const updatePartUnit = (select) => {
+        const output = select.closest('.form-field')?.querySelector('[data-part-unit-output]');
+        if (!output) return;
+        const unit = select.selectedOptions[0]?.dataset.unit;
+        output.textContent = unit ? `${output.dataset.unitLabel}: ${unit}` : '';
+    };
+    const filterPartOptions = (searchInput) => {
+        const field = searchInput.closest('.form-field');
+        const select = field?.querySelector('select[data-part-select]');
+        if (!select) return;
+        const query = searchInput.value.trim().toLocaleLowerCase();
+        for (const option of select.options) {
+            if (!option.value) continue;
+            option.hidden = Boolean(query) && !option.dataset.search?.includes(query);
+        }
+        const selectedOption = select.selectedOptions[0];
+        if (query && selectedOption?.value && selectedOption.hidden) {
+            select.value = '';
+            updatePartUnit(select);
+        }
+    };
+    document.addEventListener('input', (event) => {
+        const searchInput = event.target.closest('input[data-part-search]');
+        if (searchInput) filterPartOptions(searchInput);
+    });
+    document.addEventListener('change', (event) => {
+        const select = event.target.closest('select[data-part-select]');
+        if (!select) return;
+        const searchInput = select.closest('.form-field')?.querySelector('input[data-part-search]');
+        if (searchInput) {
+            searchInput.value = '';
+            filterPartOptions(searchInput);
+        }
+        updatePartUnit(select);
+    });
+    document.querySelectorAll('select[data-part-select]').forEach((select) => {
+        updatePartUnit(select);
+        const searchInput = select.closest('.form-field')?.querySelector('input[data-part-search]');
+        if (searchInput) filterPartOptions(searchInput);
+    });
     // Il pannello admin mantiene il proprio comportamento e layout Django.
     if (!desktop.matches || path.startsWith('/admin/')) return;
 
@@ -52,7 +119,12 @@
             .map((link) => ({ link, path: new URL(link.href, window.location.href).pathname }))
             .filter(({ path: linkPath }) => linkPath === currentPath || (linkPath !== '/' && currentPath.startsWith(linkPath)));
         candidates.sort((a, b) => b.path.length - a.path.length);
-        candidates[0]?.link.setAttribute('aria-current', 'page');
+        const activeLink = candidates[0]?.link;
+        activeLink?.setAttribute('aria-current', 'page');
+        const activeGroup = activeLink?.closest('details.sidebar-group');
+        sidebar.querySelectorAll('details.sidebar-group').forEach((group) => {
+            group.open = activeGroup ? group === activeGroup || group.open : false;
+        });
     };
 
     const applyResponse = async (response, requestedUrl, push) => {
@@ -110,7 +182,7 @@
 
     document.addEventListener('submit', (event) => {
         const form = event.target;
-        if (!(form instanceof HTMLFormElement) || !content.contains(form) || form.target || form.dataset.noSpa === 'true') return;
+        if (event.defaultPrevented || !(form instanceof HTMLFormElement) || !content.contains(form) || form.target || form.dataset.noSpa === 'true') return;
         const url = new URL(form.action || window.location.href, window.location.href);
         if (url.origin !== window.location.origin || url.pathname.startsWith('/admin/')) return;
         const method = form.method.toLowerCase();

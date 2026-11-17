@@ -40,6 +40,14 @@ def job_action(request, pk, action):
     return fleet_views.job_action(request, pk, action)
 
 
+def job_parts_request(request, pk):
+    return fleet_views.job_parts_request(request, pk)
+
+
+def job_complete(request, pk):
+    return fleet_views.job_complete(request, pk)
+
+
 def my_jobs(request):
     return fleet_views.my_jobs(request)
 

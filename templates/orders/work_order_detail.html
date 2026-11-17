@@ -36,13 +36,14 @@
             {% with participants=job.participations.all %}{% if participants %}<p>{% translate "Technician" %}: {% for participation in participants %}{{ participation.mechanic.get_full_name|default:participation.mechanic.username }}{% if not forloop.last %}, {% endif %}{% endfor %}</p>{% endif %}{% endwith %}
             {% for note in job.notes.all %}<p><strong>{{ note.author|default:_('System') }} · {{ note.created_at|date:"d/m/Y H:i" }}:</strong> {{ note.text|linebreaksbr }}</p>{% endfor %}
             {% for attachment in job.attachments.all %}<p>{% if LANGUAGE_CODE == 'it' %}Allegato{% elif LANGUAGE_CODE == 'es' %}Adjunto{% else %}{% translate "Attachment" %}{% endif %}: <a href="{{ attachment.file.url }}" target="_blank" rel="noopener">{{ attachment.caption|default:attachment.file_name }}</a></p>{% endfor %}
+            {% if job.parts_used.all %}<p><strong>{% translate "Parts consumed from stock" %}:</strong> {% for usage in job.parts_used.all %}{{ usage.part }} · {{ usage.quantity_used }} {{ usage.part.unit }}{% if not forloop.last %}; {% endif %}{% endfor %}</p>{% endif %}
         </article>
     {% empty %}<p>—</p>{% endfor %}
 </section>
 
 <section class="panel" style="margin-top:18px">
     <h3>{% translate "Parts requests" %}</h3>
-    {% for item in parts_requests %}<p><strong>{{ item.part|default:item.custom_item }}</strong> · {{ item.get_status_display }} · {{ item.quantity_requested }} {{ item.unit }}{% if item.quantity_delivered %} / {{ item.quantity_delivered }} {{ item.unit_delivered|default:item.unit }}{% endif %}</p>{% empty %}<p>—</p>{% endfor %}
+    {% for item in parts_requests %}<p>{% if item.status == "delivered" %}✓ {% endif %}<strong>{{ item.part|default:item.custom_item }}</strong> · {{ item.get_status_display }} · {{ item.quantity_requested }} {{ item.unit }}{% if item.quantity_delivered %} / {{ item.quantity_delivered }} {{ item.unit_delivered|default:item.unit }}{% endif %}</p>{% empty %}<p>—</p>{% endfor %}
 </section>
 
 {% if warranty_claims or warranty_returns %}<section class="panel" style="margin-top:18px">

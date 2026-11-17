@@ -46,6 +46,21 @@ msgstr "Panoramica"
 msgid "Dashboard"
 msgstr "Dashboard"
 
+msgid "Master data"
+msgstr "Anagrafiche"
+
+msgid "Orders"
+msgstr "Ordini"
+
+msgid "Workshop operations"
+msgstr "Ordini di lavorazione"
+
+msgid "Utilities"
+msgstr "Utility"
+
+msgid "Labor articles"
+msgstr "Articoli manodopera"
+
 msgid "Contacts"
 msgstr "Anagrafiche"
 
@@ -1164,3 +1179,147 @@ msgstr "Inserisci un danno per riga."
 
 msgid "No technician is available: check the department, active account, and active workshop membership."
 msgstr "Nessun meccanico disponibile: verifica reparto Technician, account attivo e appartenenza attiva all'officina."
+
+msgid "Catalog part"
+msgstr "Ricambio a catalogo"
+
+msgid "Other part"
+msgstr "Altro ricambio"
+
+msgid "Unit"
+msgstr "Unità"
+
+msgid "Notes"
+msgstr "Note"
+
+msgid "Choose a catalog part or an item name, not both."
+msgstr "Scegli un ricambio a catalogo oppure inserisci un nome, non entrambi."
+
+msgid "Choose a catalog part or enter an item name."
+msgstr "Scegli un ricambio a catalogo oppure inserisci il nome del ricambio."
+
+msgid "Enter a quantity greater than zero."
+msgstr "Inserisci una quantità maggiore di zero."
+
+msgid "Add at least one part before sending the request."
+msgstr "Aggiungi almeno un ricambio prima di inviare la richiesta."
+
+msgid "Quantity used"
+msgstr "Quantità utilizzata"
+
+msgid "Choose a catalog part."
+msgstr "Scegli un ricambio a catalogo."
+
+msgid "Parts requested from a job"
+msgstr "Richiesta ricambi da una lavorazione"
+
+msgid "Parts request sent to the warehouse."
+msgstr "Richiesta ricambi inviata al magazzino."
+
+msgid "Only a technician with an active session can request parts for this job."
+msgstr "Solo un meccanico con una sessione attiva può richiedere ricambi per questa lavorazione."
+
+msgid "Only a technician with an active session can finish this job session."
+msgstr "Solo un meccanico con una sessione attiva può terminare la propria sessione."
+
+msgid "This job session is no longer active."
+msgstr "Questa sessione di lavoro non è più attiva."
+
+msgid "A selected part is no longer available. Reload the page and try again."
+msgstr "Un ricambio selezionato non è più disponibile. Ricarica la pagina e riprova."
+
+msgid "Insufficient stock for: %(parts)s."
+msgstr "Giacenza insufficiente per: %(parts)s."
+
+msgid "Session finished and parts used were recorded."
+msgstr "Sessione terminata e ricambi utilizzati registrati."
+
+msgid "Parts for this job"
+msgstr "Ricambi per questa lavorazione"
+
+msgid "Received"
+msgstr "Ricevuto"
+
+msgid "No parts have been requested for this job."
+msgstr "Non sono stati richiesti ricambi per questa lavorazione."
+
+msgid "Request parts from the warehouse"
+msgstr "Richiedi ricambi al magazzino"
+
+msgid "Add one line for each part, then send the complete list to the warehouse."
+msgstr "Aggiungi una riga per ogni ricambio, poi invia l'elenco completo al magazzino."
+
+msgid "Add another part"
+msgstr "Aggiungi un altro ricambio"
+
+msgid "Send to warehouse"
+msgstr "Invia al magazzino"
+
+msgid "Finish session and record parts used"
+msgstr "Termina sessione e registra i ricambi usati"
+
+msgid "Remove line"
+msgstr "Rimuovi riga"
+
+msgid "Finish job session"
+msgstr "Termina sessione di lavorazione"
+
+msgid "Back to my jobs"
+msgstr "Torna alle mie lavorazioni"
+
+msgid "Record only additional parts taken from workshop stock. Parts already requested and delivered are recorded separately."
+msgstr "Registra solo i ricambi aggiuntivi prelevati dalla giacenza dell'officina. I ricambi già richiesti e consegnati sono registrati separatamente."
+
+msgid "Other technicians are still working on this job. This will stop only your timer."
+msgstr "Altri meccanici stanno ancora lavorando a questa lavorazione. Questa azione terminerà solo il tuo timer."
+
+msgid "Confirm the parts list before finishing your session."
+msgstr "Conferma l'elenco dei ricambi prima di terminare la sessione."
+
+msgid "Add used part"
+msgstr "Aggiungi ricambio usato"
+
+msgid "I confirm this list is complete, including when no additional parts were used."
+msgstr "Confermo che l'elenco è completo, anche se non ho usato altri ricambi."
+
+msgid "Confirm and finish session"
+msgstr "Conferma e termina sessione"
+
+msgid "Parts consumed from stock"
+msgstr "Ricambi consumati da magazzino"
+
+msgid "Confirm delivery"
+msgstr "Conferma consegna"
+
+msgid "View my jobs"
+msgstr "Visualizza le mie lavorazioni"
+
+msgid "My active sessions"
+msgstr "Le mie sessioni attive"
+
+msgid "Paused"
+msgstr "In pausa"
+
+msgid "In progress"
+msgstr "In corso"
+
+msgid "Workshop jobs"
+msgstr "Ordini di lavorazione"
+
+msgid "Select a pause reason before pausing."
+msgstr "Seleziona una causale prima di mettere in pausa."
+
+msgid "Send this parts request to the warehouse?"
+msgstr "Inviare questa richiesta di ricambi al magazzino?"
+
+msgid "Search parts by code or name"
+msgstr "Cerca ricambi per codice o nome"
+
+msgid "Recent sessions"
+msgstr "Sessioni recenti"
+
+msgid "Session closed"
+msgstr "Sessione chiusa"
+
+msgid "Ended"
+msgstr "Terminata"

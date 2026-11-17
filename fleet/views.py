@@ -14,10 +14,12 @@ from xml.sax.saxutils import escape
 
 from workshops.models import Membership
 from workshops.models import Role, Workshop
-from .forms import CamperForm, CamperPhotoForm, WorkOrderForm
+from .forms import (
+    CamperForm, CamperPhotoForm, PartsRequestFormSet, PartsUsageFormSet, WorkOrderForm,
+)
 from .models import (Attachment, AuditLog, Camper, CamperPhoto, DocumentCategory, JobAssignment,
-                     JobNote, JobParticipation, Notification, PartsRequest, TimeEvent, WarrantyClaim,
-                     WarrantyReturn)
+                     JobNote, JobPartUsage, JobParticipation, Notification, PartsRequest, TimeEvent,
+                     WarrantyClaim, WarrantyReturn)
 from clientandsuppliers.models import CamperOwner
 from orders.models import Job, JobCall, LaborArticle, PauseReason, WorkOrder, next_ro_number
 from parts.models import Part, PartDocument, PartMovement, PartSupplierOffer
@@ -115,7 +117,7 @@ def work_order_detail(request, pk):
     order = get_object_or_404(
         WorkOrder.objects.select_related("customer", "vehicle", "created_by", "invoiced_by").prefetch_related(
             "jobs__time_events", "jobs__participations__mechanic", "jobs__notes__author",
-            "jobs__attachments__category", "parts_requests__part", "attachments__category",
+            "jobs__attachments__category", "jobs__parts_used__part", "parts_requests__part", "attachments__category",
             "warranty_claims", "warranty_returns",
         ),
         pk=pk,
@@ -234,11 +236,22 @@ def _job_minutes(job):
 
 @login_required
 def dashboard(request):
-    if _is_mechanic(request.user):
-        return redirect("jobs")
     workshop = _workshop_or_redirect(request)
     if workshop is None:
         return render(request, "fleet/dashboard.html", {"has_workshop": False})
+    if _is_mechanic(request.user):
+        context = {
+            "has_workshop": True,
+            "is_mechanic": True,
+            "my_active_sessions": JobParticipation.objects.filter(
+                workshop=workshop, mechanic=request.user, is_active=True
+            ).select_related("job", "job__work_order"),
+            "my_pending_calls": JobCall.objects.filter(
+                workshop=workshop, mechanic=request.user, accepted_at__isnull=True,
+                dismissed_at__isnull=True,
+            ).select_related("job", "job__work_order"),
+        }
+        return render(request, "fleet/dashboard.html", context)
     orders = WorkOrder.objects.filter(workshop=workshop)
     jobs = Job.objects.filter(workshop=workshop)
     low_stock = Part.objects.filter(workshop=workshop, quantity__lte=models.F("min_stock"))
@@ -559,7 +572,11 @@ def job_action(request, pk, action):
             job.save(update_fields=("status", "started_at", "updated_at"))
         TimeEvent.objects.create(workshop=workshop, job=job, mechanic=request.user, event_type=event, event_at=now)
     elif action == "pause" and participation and not participation.paused_at:
-        reason = get_object_or_404(PauseReason, pk=request.POST.get("pause_reason"), is_active=True)
+        reason_id = request.POST.get("pause_reason")
+        reason = PauseReason.objects.filter(pk=reason_id, is_active=True).first() if reason_id else None
+        if reason is None:
+            messages.error(request, _("Select a pause reason before pausing."))
+            return redirect("my_jobs" if _is_mechanic(request.user) else "jobs")
         participation.paused_at = now
         participation.save(update_fields=("paused_at",))
         TimeEvent.objects.create(workshop=workshop, job=job, mechanic=request.user, event_type="pause", pause_reason=reason, event_at=now)
@@ -572,16 +589,8 @@ def job_action(request, pk, action):
         job.status = "in_progress"
         job.save(update_fields=("status", "updated_at"))
         TimeEvent.objects.create(workshop=workshop, job=job, mechanic=request.user, event_type="resume", event_at=now)
-    elif action == "complete" and participation:
-        participation.is_active, participation.finished_at, participation.paused_at = False, now, None
-        participation.save(update_fields=("is_active", "finished_at", "paused_at"))
-        TimeEvent.objects.create(workshop=workshop, job=job, mechanic=request.user, event_type="finish", event_at=now)
-        if not JobParticipation.objects.filter(job=job, is_active=True).exists():
-            job.status, job.completed_at = "completed", now
-            job.save(update_fields=("status", "completed_at", "updated_at"))
-        elif not JobParticipation.objects.filter(job=job, is_active=True, paused_at__isnull=True).exists():
-            job.status = "paused"
-            job.save(update_fields=("status", "updated_at"))
+    elif action == "complete":
+        return redirect("job_complete", pk=job.pk)
     else:
         messages.error(request, _("This action is not valid for your job session status."))
     _audit(workshop, request.user, action, Job, job)
@@ -592,12 +601,230 @@ def job_action(request, pk, action):
 def my_jobs(request):
     workshop = _workshop_or_redirect(request)
     if workshop is None: return redirect("home")
+    return _render_my_jobs(request, workshop)
+
+
+def _render_my_jobs(request, workshop, bound_request_formsets=None):
+    bound_request_formsets = bound_request_formsets or {}
     calls = JobCall.objects.filter(workshop=workshop, mechanic=request.user, accepted_at__isnull=True,
         dismissed_at__isnull=True).select_related("job", "job__work_order", "called_by")
-    participations = JobParticipation.objects.filter(workshop=workshop, mechanic=request.user,
-        is_active=True).select_related("job", "job__work_order")
-    return render(request, "fleet/my_jobs.html", {"calls": calls, "participations": participations,
-        "pause_reasons": PauseReason.objects.filter(is_active=True)})
+    participations = list(JobParticipation.objects.filter(workshop=workshop, mechanic=request.user,
+        is_active=True).select_related("job", "job__work_order").prefetch_related(
+            "job__parts_requests__part"
+        ))
+    for participation in participations:
+        participation.pause_reason = None
+        if participation.paused_at:
+            latest_pause = TimeEvent.objects.filter(
+                workshop=workshop,
+                job=participation.job,
+                mechanic=request.user,
+                event_type="pause",
+            ).select_related("pause_reason").order_by("-event_at", "-pk").first()
+            participation.pause_reason = latest_pause.pause_reason if latest_pause else None
+        participation.parts_formset = bound_request_formsets.get(participation.job_id) or PartsRequestFormSet(
+            prefix=f"parts-{participation.job_id}", form_kwargs={"workshop": workshop}
+        )
+    recent_sessions = JobParticipation.objects.filter(
+        workshop=workshop,
+        mechanic=request.user,
+        is_active=False,
+        finished_at__isnull=False,
+    ).select_related("job", "job__work_order").order_by("-finished_at")[:5]
+    return render(request, "fleet/my_jobs.html", {
+        "calls": calls,
+        "participations": participations,
+        "recent_sessions": recent_sessions,
+        "pause_reasons": PauseReason.objects.filter(is_active=True),
+    })
+
+
+@login_required
+def job_parts_request(request, pk):
+    if request.method != "POST":
+        return HttpResponseNotAllowed(["POST"])
+    workshop = _workshop_or_redirect(request)
+    if workshop is None:
+        return redirect("home")
+    job = get_object_or_404(Job.objects.select_related("work_order"), pk=pk, workshop=workshop)
+    if not JobParticipation.objects.filter(
+        workshop=workshop, job=job, mechanic=request.user, is_active=True
+    ).exists():
+        return HttpResponseForbidden(_("Only a technician with an active session can request parts for this job."))
+
+    prefix = f"parts-{job.pk}"
+    formset = PartsRequestFormSet(request.POST, prefix=prefix, form_kwargs={"workshop": workshop})
+    if not formset.is_valid():
+        return _render_my_jobs(request, workshop, {job.pk: formset})
+
+    requests = []
+    with transaction.atomic():
+        for form in formset:
+            data = form.cleaned_data
+            if not data or data.get("DELETE") or not (data.get("part") or data.get("custom_item")):
+                continue
+            part = data["part"]
+            item = PartsRequest.objects.create(
+                workshop=workshop,
+                work_order=job.work_order,
+                job=job,
+                part=part,
+                quantity_requested=data["quantity_requested"],
+                unit=part.unit,
+                notes=data.get("notes", "").strip(),
+                requested_by=request.user,
+            )
+            requests.append(item)
+            _audit(workshop, request.user, "create", PartsRequest, item)
+
+        recipients = request.user.__class__.objects.filter(
+            department="parts",
+            is_active=True,
+            memberships__workshop=workshop,
+            memberships__is_active=True,
+        ).distinct()
+        notification_body = f"{job.work_order.ro_number} · {job.title} · {len(requests)}"
+        if recipients.exists():
+            for recipient in recipients:
+                Notification.objects.create(
+                    workshop=workshop,
+                    user=recipient,
+                    title=str(_("Parts requested from a job")),
+                    body=notification_body,
+                    link="/richieste-ricambi/",
+                    work_order=job.work_order,
+                )
+        else:
+            Notification.objects.create(
+                workshop=workshop,
+                title=str(_("Parts requested from a job")),
+                body=notification_body,
+                link="/richieste-ricambi/",
+                work_order=job.work_order,
+            )
+
+    messages.success(request, _("Parts request sent to the warehouse."))
+    return redirect("my_jobs")
+
+
+@login_required
+def job_complete(request, pk):
+    workshop = _workshop_or_redirect(request)
+    if workshop is None:
+        return redirect("home")
+    job = get_object_or_404(Job.objects.select_related("work_order"), pk=pk, workshop=workshop)
+    participation = JobParticipation.objects.filter(
+        workshop=workshop, job=job, mechanic=request.user, is_active=True
+    ).first()
+    if participation is None:
+        return HttpResponseForbidden(_("Only a technician with an active session can finish this job session."))
+
+    prefix = f"used-parts-{job.pk}"
+    formset = PartsUsageFormSet(
+        request.POST or None, prefix=prefix, form_kwargs={"workshop": workshop}
+    )
+    confirmation_error = False
+    stock_error = ""
+    if request.method == "POST":
+        if formset.is_valid() and request.POST.get("parts_used_confirmed") == "1":
+            usages = [
+                form.cleaned_data
+                for form in formset
+                if form.cleaned_data and not form.cleaned_data.get("DELETE") and form.cleaned_data.get("part")
+            ]
+            quantities_by_part = {}
+            for usage in usages:
+                part_id = usage["part"].pk
+                quantities_by_part[part_id] = quantities_by_part.get(part_id, Decimal("0")) + usage["quantity_used"]
+
+            with transaction.atomic():
+                locked_job = get_object_or_404(
+                    Job.objects.select_for_update().select_related("work_order"),
+                    pk=job.pk, workshop=workshop,
+                )
+                locked_participation = JobParticipation.objects.select_for_update().filter(
+                    workshop=workshop, job=locked_job, mechanic=request.user, is_active=True
+                ).first()
+                if locked_participation is None:
+                    return HttpResponseForbidden(_("This job session is no longer active."))
+
+                locked_parts = {
+                    part.pk: part
+                    for part in Part.objects.select_for_update().filter(
+                        workshop=workshop, pk__in=quantities_by_part
+                    )
+                }
+                missing_part_ids = quantities_by_part.keys() - locked_parts.keys()
+                insufficient = []
+                if missing_part_ids:
+                    stock_error = _("A selected part is no longer available. Reload the page and try again.")
+                else:
+                    insufficient = [
+                        locked_parts[part_id]
+                        for part_id, quantity in quantities_by_part.items()
+                        if locked_parts[part_id].quantity < quantity
+                    ]
+                if insufficient:
+                    stock_error = _("Insufficient stock for: %(parts)s.") % {
+                        "parts": ", ".join(str(part) for part in insufficient)
+                    }
+                if not missing_part_ids and not insufficient:
+                    now = timezone.now()
+                    for usage in usages:
+                        part = locked_parts[usage["part"].pk]
+                        quantity = usage["quantity_used"]
+                        part.quantity -= quantity
+                        part.save(update_fields=("quantity", "updated_at"))
+                        JobPartUsage.objects.create(
+                            workshop=workshop,
+                            job=locked_job,
+                            part=part,
+                            quantity_used=quantity,
+                            used_by=request.user,
+                        )
+                        PartMovement.objects.create(
+                            workshop=workshop,
+                            part=part,
+                            work_order=locked_job.work_order,
+                            movement_type="out",
+                            quantity=quantity,
+                            unit_cost=part.cost_price,
+                            note=f"Consumo lavorazione #{locked_job.pk}",
+                            created_by=request.user,
+                        )
+
+                    locked_participation.is_active = False
+                    locked_participation.finished_at = now
+                    locked_participation.paused_at = None
+                    locked_participation.save(update_fields=("is_active", "finished_at", "paused_at"))
+                    TimeEvent.objects.create(
+                        workshop=workshop, job=locked_job, mechanic=request.user,
+                        event_type="finish", event_at=now,
+                    )
+                    if not JobParticipation.objects.filter(job=locked_job, is_active=True).exists():
+                        locked_job.status, locked_job.completed_at = "completed", now
+                        locked_job.save(update_fields=("status", "completed_at", "updated_at"))
+                    elif not JobParticipation.objects.filter(
+                        job=locked_job, is_active=True, paused_at__isnull=True
+                    ).exists():
+                        locked_job.status = "paused"
+                        locked_job.save(update_fields=("status", "updated_at"))
+                    _audit(workshop, request.user, "complete", Job, locked_job)
+                    messages.success(request, _("Session finished and parts used were recorded."))
+                    return redirect("my_jobs" if _is_mechanic(request.user) else "jobs")
+        else:
+            confirmation_error = request.POST.get("parts_used_confirmed") != "1"
+
+    other_participations = JobParticipation.objects.filter(
+        job=job, is_active=True
+    ).exclude(mechanic=request.user).select_related("mechanic")
+    return render(request, "fleet/job_complete.html", {
+        "job": job,
+        "formset": formset,
+        "confirmation_error": confirmation_error,
+        "stock_error": stock_error,
+        "other_participations": other_participations,
+    })
 
 
 @login_required
@@ -789,6 +1016,7 @@ def work_order_report(request, pk):
     story.extend([job_table, Spacer(1, 3 * mm), paragraph(f"Tempo consuntivo totale: {total_minutes / 60:.2f} ore · Totale manodopera: {money(labor_total)}", "RightCell"), Spacer(1, 5 * mm), Paragraph("Ricambi utilizzati", styles["Heading2"])])
 
     requests = list(order.parts_requests.filter(status="delivered").select_related("part"))
+    usages = list(JobPartUsage.objects.filter(job__work_order=order).select_related("part"))
     part_rows = [[paragraph("Articolo", "SmallCell"), paragraph("Quantità", "RightCell"), paragraph("Prezzo unitario", "RightCell"), paragraph("Importo", "RightCell")]]
     parts_total = 0
     for item in requests:
@@ -801,7 +1029,17 @@ def work_order_report(request, pk):
         part_rows.append([paragraph(name, "SmallCell"), paragraph(f"{quantity} {item.unit_delivered or item.unit}", "RightCell"),
                           paragraph(money(unit_price) if unit_price is not None else "Da definire", "RightCell"),
                           paragraph(money(line_total) if line_total is not None else "Da definire", "RightCell")])
-    if not requests:
+    for usage in usages:
+        unit_price = usage.part.sale_price
+        line_total = usage.quantity_used * unit_price
+        parts_total += line_total
+        part_rows.append([
+            paragraph(f"{usage.part} · Consumo da magazzino", "SmallCell"),
+            paragraph(f"{usage.quantity_used} {usage.part.unit}", "RightCell"),
+            paragraph(money(unit_price), "RightCell"),
+            paragraph(money(line_total), "RightCell"),
+        ])
+    if not requests and not usages:
         part_rows.append([paragraph("Nessun ricambio registrato come consegnato", "SmallCell"), paragraph("—", "RightCell"), paragraph("—", "RightCell"), paragraph("—", "RightCell")])
     part_table = LongTable(part_rows, colWidths=(83 * mm, 29 * mm, 35 * mm, 25 * mm), repeatRows=1)
     part_table.setStyle(TableStyle([
@@ -895,7 +1133,7 @@ def data_export(request):
     if workshop is None: return redirect("home")
     models_to_export = (Workshop, Role, Membership, CamperOwner, Camper, CamperPhoto, WorkOrder, Job, Quote, QuoteLine, Part, PartMovement,
                         PartSupplierOffer, PartDocument,
-                        PartsRequest, WarrantyClaim, WarrantyReturn, JobNote,
+                        PartsRequest, JobPartUsage, WarrantyClaim, WarrantyReturn, JobNote,
                         Attachment, Notification, TimeEvent, JobAssignment, AuditLog)
     querysets = [model.objects.filter(pk=workshop.pk) if model is Workshop
                  else model.objects.filter(part__workshop=workshop) if model in (PartSupplierOffer, PartDocument)

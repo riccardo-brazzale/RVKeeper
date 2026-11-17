@@ -1,0 +1,26 @@
+{% extends "base.html" %}
+{% load i18n %}
+{% block title %}{% translate "Finish job session" %} · RVKeeper{% endblock %}
+{% block content %}
+<div class="page-heading">
+    <div><h2>{% translate "Finish job session" %}</h2><p>{{ job.work_order.ro_number }} · {{ job.title }}</p></div>
+    <a class="button-link" href="{% url 'my_jobs' %}">{% translate "Back to my jobs" %}</a>
+</div>
+<section class="panel">
+    <p>{% translate "Record only additional parts taken from workshop stock. Parts already requested and delivered are recorded separately." %}</p>
+    {% if other_participations %}
+    <p class="status-note">{% translate "Other technicians are still working on this job. This will stop only your timer." %}</p>
+    {% endif %}
+    <form method="post" action="{% url 'job_complete' pk=job.pk %}" data-formset>
+        {% csrf_token %}
+        {% if confirmation_error %}<p class="form-errors" role="alert">{% translate "Confirm the parts list before finishing your session." %}</p>{% endif %}
+        {% if stock_error %}<p class="form-errors" role="alert">{{ stock_error }}</p>{% endif %}
+        {% include "fleet/_parts_formset.html" with formset=formset %}
+        <div class="form-actions">
+            <button type="button" data-formset-add>{% translate "Add used part" %}</button>
+            <label class="inline-checkbox"><input type="checkbox" name="parts_used_confirmed" value="1" required {% if request.POST.parts_used_confirmed == "1" %}checked{% endif %}> {% translate "I confirm this list is complete, including when no additional parts were used." %}</label>
+            <button type="submit">{% translate "Confirm and finish session" %}</button>
+        </div>
+    </form>
+</section>
+{% endblock %}

@@ -3,6 +3,70 @@
 {% block title %}{% translate "My jobs" %} · RVKeeper{% endblock %}
 {% block content %}
 <div class="page-heading"><div><h2>{% translate "My jobs" %}</h2><p>{% translate "Incoming calls and your personal time. You can work with other technicians on the same job." %}</p></div><a class="button-link" href="{% url 'jobs' %}">{% translate "All jobs" %}</a></div>
-<section class="panel"><h3>{% translate "Incoming calls" %}</h3>{% for call in calls %}<article class="panel" style="margin:12px 0;padding:18px"><b>{{ call.job.work_order.ro_number }} · {{ call.job.title }}</b><p>{% translate "Requested by" %} {{ call.called_by|default:_("Manager") }} · {{ call.created_at|date:"d/m/Y H:i" }}</p><form method="post" action="{% url 'job_action' pk=call.job_id action='accept_call' %}">{% csrf_token %}<input type="hidden" name="call_id" value="{{ call.pk }}"><button type="submit">{% translate "Accept and start timer" %}</button></form></article>{% empty %}<p>{% translate "No pending calls." %}</p>{% endfor %}</section>
-<section class="panel" style="margin-top:18px"><h3>{% translate "Personal sessions" %}</h3>{% for item in participations %}<article class="panel" style="margin:12px 0;padding:18px"><b>{{ item.job.work_order.ro_number }} · {{ item.job.title }}</b><p>{{ item.job.description|default:"" }} · {% translate "Started" %} {{ item.started_at|date:"d/m/Y H:i"|default:_("not started yet") }}</p>{% if item.paused_at %}<form method="post" action="{% url 'job_action' pk=item.job_id action='resume' %}">{% csrf_token %}<button>{% translate "Resume timer" %}</button></form>{% else %}<form method="post" action="{% url 'job_action' pk=item.job_id action='pause' %}">{% csrf_token %}<label for="pause-{{ item.pk }}">{% translate "Pause reason" %}</label><select id="pause-{{ item.pk }}" name="pause_reason" required>{% for reason in pause_reasons %}<option value="{{ reason.pk }}">{{ reason.label }}</option>{% endfor %}</select><button>{% translate "Pause" %}</button></form>{% endif %}<form method="post" action="{% url 'job_action' pk=item.job_id action='complete' %}">{% csrf_token %}<button>{% translate "Stop my timer" %}</button></form></article>{% empty %}<p>{% translate "You have no active sessions." %}</p>{% endfor %}</section>
+<section class="panel">
+    <h3>{% translate "Incoming calls" %}</h3>
+    {% for call in calls %}
+    <article class="panel" style="margin:12px 0;padding:18px">
+        <b>{{ call.job.work_order.ro_number }} · {{ call.job.title }}</b>
+        <p>{% translate "Requested by" %} {{ call.called_by|default:_("Manager") }} · {{ call.created_at|date:"d/m/Y H:i" }}</p>
+        <form method="post" action="{% url 'job_action' pk=call.job_id action='accept_call' %}">{% csrf_token %}<input type="hidden" name="call_id" value="{{ call.pk }}"><button type="submit">{% translate "Accept and start timer" %}</button></form>
+    </article>
+    {% empty %}<p>{% translate "No pending calls." %}</p>{% endfor %}
+</section>
+
+<section class="panel" style="margin-top:18px">
+    <h3>{% translate "Personal sessions" %}</h3>
+    {% for item in participations %}
+    <article class="panel job-session-card">
+        <div class="session-heading">
+            <div class="session-statuses">
+                {% if item.paused_at %}<span class="session-status session-status-paused">{% translate "Paused" %}{% if item.pause_reason %} · {{ item.pause_reason.label }}{% endif %}</span>
+                {% else %}<span class="session-status session-status-active">{% translate "Active" %}</span>{% endif %}
+            </div>
+            <strong>{{ item.job.work_order.ro_number }} · {{ item.job.title }}</strong>
+        </div>
+        <p>{{ item.job.description|default:"" }} · {% translate "Started" %} {{ item.started_at|date:"d/m/Y H:i"|default:_("not started yet") }}</p>
+        <div class="session-actions">
+            {% if item.paused_at %}
+            <form method="post" action="{% url 'job_action' pk=item.job_id action='resume' %}">{% csrf_token %}<button class="button-resume">{% translate "Resume timer" %}</button></form>
+            {% else %}
+            <form method="post" action="{% url 'job_action' pk=item.job_id action='pause' %}">{% csrf_token %}<label for="pause-{{ item.pk }}">{% translate "Pause reason" %}</label><select id="pause-{{ item.pk }}" name="pause_reason" required><option value="" selected disabled></option>{% for reason in pause_reasons %}<option value="{{ reason.pk }}">{{ reason.label }}</option>{% endfor %}</select><button class="button-pause">{% translate "Pause" %}</button></form>
+            {% endif %}
+            <a class="button-link button-finish" href="{% url 'job_complete' pk=item.job_id %}">{% translate "Finish session and record parts used" %}</a>
+        </div>
+
+        <section class="parts-session-section">
+            <h4>{% translate "Parts for this job" %}</h4>
+            {% for part_request in item.job.parts_requests.all %}
+            <p class="parts-request-status">
+                {% if part_request.status == "delivered" %}<span aria-label="{% translate 'Received' %}">✓</span>{% else %}<span aria-hidden="true">◷</span>{% endif %}
+                <strong>{{ part_request.part|default:part_request.custom_item }}</strong> · {{ part_request.quantity_requested }} {{ part_request.unit }} · {{ part_request.get_status_display }}
+            </p>
+            {% empty %}<p>{% translate "No parts have been requested for this job." %}</p>{% endfor %}
+
+            <form method="post" action="{% url 'job_parts_request' pk=item.job_id %}" data-formset data-confirm="{% translate 'Send this parts request to the warehouse?' %}">
+                {% csrf_token %}
+                <h5>{% translate "Request parts from the warehouse" %}</h5>
+                <p>{% translate "Add one line for each part, then send the complete list to the warehouse." %}</p>
+                {% include "fleet/_parts_formset.html" with formset=item.parts_formset %}
+                <div class="form-actions"><button type="button" class="button-add" data-formset-add>{% translate "Add another part" %}</button><button type="submit" class="button-send">{% translate "Send to warehouse" %}</button></div>
+            </form>
+        </section>
+    </article>
+    {% empty %}<p>{% translate "You have no active sessions." %}</p>{% endfor %}
+    {% if recent_sessions %}
+    <h3 class="recent-session-heading">{% translate "Recent sessions" %}</h3>
+    {% for item in recent_sessions %}
+    <article class="panel job-session-card job-session-closed">
+        <div class="session-heading">
+            <div class="session-statuses">
+                <span class="session-status session-status-closed">{% translate "Session closed" %}</span>
+            </div>
+            <strong>{{ item.job.work_order.ro_number }} · {{ item.job.title }}</strong>
+        </div>
+        <p>{% translate "Ended" %} {{ item.finished_at|date:"d/m/Y H:i" }}</p>
+    </article>
+    {% endfor %}
+    {% endif %}
+</section>
 {% endblock %}

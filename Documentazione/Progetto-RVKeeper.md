@@ -154,6 +154,8 @@ flowchart LR
 
 ### Interfaccia smartphone e desktop
 
+Il menu autenticato mostra **Dashboard** come prima voce, separata dai gruppi e evidenziata in rosso. Su desktop la sidebar occupa 340 pixel; su mobile resta un pannello a scomparsa largo al massimo 360 pixel o il 92% della viewport. I gruppi sono **Anagrafiche** (clienti/fornitori, parco mezzi, articoli di manodopera e catalogo ricambi), **Ordini** (voce **Ordini** per la lista OdL, seguita dai preventivi), **Ordini di lavorazione** (sessioni e lavorazioni, richieste ricambi, note, assegnazioni e allegati), **Garanzie**, **Reports** e **Utility**. La voce relativa alla pagina corrente apre il gruppo corrispondente.
+
 L'interfaccia si adatta alla larghezza della viewport, senza richiedere un'app installata. La soglia corrente e 760 pixel: smartphone e finestre strette mantengono il layout mobile esistente, con menu laterale a scomparsa e contenuti impilati. La navigazione asincrona e attiva solo oltre tale soglia.
 
 Su desktop e schermi ampi il CSS aggiunge una presentazione gestionale piu densa: barra superiore compatta, navigazione laterale persistente, schede riepilogative, tabelle e gerarchia visiva piu marcate. La foto `static/images/rv-background.webp` torna visibile sullo sfondo desktop, attenuata da un velo scuro; le schede chiare mantengono il contrasto per i testi. Il JavaScript carica le navigazioni interne e i moduli GET/POST in background, sostituendo il contenuto centrale senza ricaricare l'intero documento. Aggiorna titolo e URL, supporta avanti/indietro del browser, mostra un indicatore di caricamento e mantiene il normale caricamento pagina come fallback. I template e gli endpoint Django restano la fonte dei contenuti: non e una SPA client-side autonoma.
@@ -184,13 +186,17 @@ La modifica Ã¨ prevista per preventivi in bozza non ancora convertiti. La conv
 
 Per la procedura completa dalla creazione dell’OdL alla presa in carico, gestione delle lavorazioni e chiusura, consulta [[Guida operativa - Ordini di lavoro]].
 
-L'ordine di lavoro (OdL / RO) collega officina, cliente e, facoltativamente, camper. Salva anche una fotografia dei dati cliente/veicolo (nome, contatti, marca/modello e odometro), oltre a classificazione, stato, note di accettazione, checklist e danni. Il numero RO Ã¨ univoco per officina.
+L'ordine di lavoro (OdL / RO) collega officina, cliente e camper. Il camper Ã¨ obbligatorio ed Ã¨ associato a un cliente proprietario nella stessa officina. Salva anche una fotografia dei dati cliente/veicolo (nome, contatti, marca/modello e odometro), oltre a classificazione, stato, note di accettazione, checklist e danni. Il numero RO Ã¨ univoco per officina.
 
 Stati OdL: aperto, in lavorazione, attesa collaudo, pronto consegna, lavori aggiuntivi, chiuso, annullato. La fatturazione Ã¨ rappresentata da flag e data/utente. Ogni OdL raggruppa piÃ¹ `Job` numerati: reparto, specialitÃ , tecnico assegnato e tecnico attivo, stato, tempo standard, minuti netti e di attesa, motivi di blocco, informazioni garanzia e disponibilitÃ  ricambi.
 
 Le lavorazioni possono registrare eventi temporali (avvio, pausa, fine, attesa), note, riassegnazioni e allegati. Gli stati Job includono non iniziato, in corso, in pausa, attesa ricambi, attesa garanzia, completato e annullato.
 
 ### Magazzino e approvvigionamento
+
+Le richieste ricambi possono essere inviate direttamente da **Le mie lavorazioni** durante una sessione attiva: il meccanico aggiunge più righe e le invia insieme al magazzino. Gli utenti attivi del reparto ricambi ricevono una notifica; se non ce ne sono, viene creata una notifica generale dell'officina. La conferma di consegna continua a scaricare la giacenza per gli articoli a catalogo.
+
+Alla fine della sessione il meccanico registra separatamente i ricambi aggiuntivi prelevati dalla giacenza, confermando anche l'eventuale elenco vuoto. La conferma verifica la disponibilità e, nella stessa transazione, registra `JobPartUsage`, scarica l'inventario e crea un `PartMovement`. Se la giacenza non basta, la sessione resta attiva e non vengono applicati scarichi parziali. Non vanno reinseriti nel consumo i ricambi già registrati come consegnati. Il PDF dell'OdL riepiloga entrambi i tipi di ricambio utilizzato.
 
 Ogni ricambio ha codice univoco per officina, descrizione, unitÃ , costo, prezzo vendita, tempo standard, quantitÃ , soglia minima e ubicazione. Le offerte collegano un ricambio a un fornitore e memorizzano codice fornitore, prezzo acquisto, sconto, quantitÃ  minima, tempi di consegna e preferenza. Un'offerta marcata preferita aggiorna il costo del ricambio al prezzo netto.
 
@@ -209,7 +215,7 @@ Le richieste ricambi sono legate all'OdL e, opzionalmente, alla lavorazione, all
 
 ### Dashboard, notifiche, audit e report
 
-La dashboard aggrega dati operativi per l'officina dell'utente. Il codice crea notifiche per giacenze sotto o uguali alla soglia minima, evitando duplicati solo rispetto a una combinazione di campi/query specifica (notifica generica non letta con stesso titolo/link). Le notifiche possono essere globali all'officina (`user = NULL`) o indirizzate a un utente.
+La dashboard aggrega dati operativi per l'officina dell'utente. Per i meccanici mostra le chiamate in arrivo e le sessioni personali attive; per gli altri profili mostra gli ordini aperti, le lavorazioni attive, le richieste ricambi aperte e gli articoli sotto scorta. Il codice crea notifiche per giacenze sotto o uguali alla soglia minima, evitando duplicati solo rispetto a una combinazione di campi/query specifica (notifica generica non letta con stesso titolo/link). Le notifiche possono essere globali all'officina (`user = NULL`) o indirizzate a un utente.
 
 `AuditLog` conserva officina, attore, azione, tipo/id entitÃ , eventuale OdL, dettagli e timestamp. Le viste di contatti e alcune modifiche di flusso non scrivono tutte necessariamente lo stesso livello di audit; consultare i singoli handler prima di assumere copertura completa.
 
@@ -330,7 +336,9 @@ Oltre ai vincoli SQL, alcuni `clean()`/`full_clean()` applicativi verificano coe
 | `/clienti/` | Anagrafica clienti e fornitori |
 | `/ordini/` | Lista/creazione OdL, cambio stato, prospetto PDF |
 | `/lavori/` | Lista/creazione lavorazioni e azioni Job |
-| `/lavori/miei/` | Chiamate personali, sessioni, pausa/ripresa e chiusura del tempo |
+| `/lavori/miei/` | Chiamate personali, sessioni, pausa/ripresa, richiesta ricambi al magazzino e registrazione consumi a fine sessione |
+| `/lavori/<id>/parts-request/` | Invio multiplo delle richieste ricambi dalla sessione attiva |
+| `/lavori/<id>/complete/` | Conferma dei ricambi aggiuntivi e chiusura della sessione |
 | `/preventivi/` | Lista, creazione, dettaglio, modifica, stato e conversione OdL |
 | `/magazzino/` | Catalogo articoli, movimenti, offerte e allegati |
 | `/richieste-ricambi/` | Richieste parti e azioni |

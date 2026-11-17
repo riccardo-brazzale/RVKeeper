@@ -1,0 +1,48 @@
+{% load i18n %}
+{% if formset.non_form_errors %}<div class="form-errors" role="alert">{{ formset.non_form_errors }}</div>{% endif %}
+{{ formset.management_form }}
+<div data-formset-rows>
+    {% for form in formset %}
+    <div class="form-grid formset-row" data-formset-row>
+        {% for hidden in form.hidden_fields %}{{ hidden }}{% endfor %}
+        {% for field in form.visible_fields %}
+            {% if field.name != "DELETE" %}
+            <div class="form-field{% if field.name == 'part' %} part-choice-field{% endif %}">
+                {% if field.name == "part" %}
+                    {{ field.label_tag }}
+                    <input type="search" data-part-search placeholder="{% translate 'Search parts by code or name' %}" aria-label="{% translate 'Search parts by code or name' %}" autocomplete="off">
+                    {{ field }}
+                    <small data-part-unit-output data-unit-label="{% translate 'Unit' %}" aria-live="polite"></small>
+                {% else %}
+                    {{ field.label_tag }}{{ field }}
+                {% endif %}
+                {% if field.errors %}<div class="form-errors" role="alert">{{ field.errors }}</div>{% endif %}
+            </div>
+            {% endif %}
+        {% endfor %}
+        <span data-delete-field hidden>{{ form.DELETE }}</span>
+        <button type="button" class="button-danger" data-formset-remove>{% translate "Remove line" %}</button>
+    </div>
+    {% endfor %}
+</div>
+<template data-formset-empty>
+    <div class="form-grid formset-row" data-formset-row>
+        {% for hidden in formset.empty_form.hidden_fields %}{{ hidden }}{% endfor %}
+        {% for field in formset.empty_form.visible_fields %}
+            {% if field.name != "DELETE" %}
+            <div class="form-field{% if field.name == 'part' %} part-choice-field{% endif %}">
+                {% if field.name == "part" %}
+                    {{ field.label_tag }}
+                    <input type="search" data-part-search placeholder="{% translate 'Search parts by code or name' %}" aria-label="{% translate 'Search parts by code or name' %}" autocomplete="off">
+                    {{ field }}
+                    <small data-part-unit-output data-unit-label="{% translate 'Unit' %}" aria-live="polite"></small>
+                {% else %}
+                    {{ field.label_tag }}{{ field }}
+                {% endif %}
+            </div>
+            {% endif %}
+        {% endfor %}
+        <span data-delete-field hidden>{{ formset.empty_form.DELETE }}</span>
+        <button type="button" class="button-danger" data-formset-remove>{% translate "Remove line" %}</button>
+    </div>
+</template>

@@ -353,6 +353,34 @@ class PartsRequest(models.Model):
                 raise ValidationError({"supplier_offer": "Scegli un’offerta associata a questo ricambio e alla stessa officina."})
 
 
+class JobPartUsage(models.Model):
+    """Inventory parts consumed by a mechanic during a job session."""
+    workshop = models.ForeignKey("workshops.Workshop", on_delete=models.CASCADE, related_name="job_part_usages")
+    job = models.ForeignKey("orders.Job", on_delete=models.CASCADE, related_name="parts_used")
+    part = models.ForeignKey("parts.Part", on_delete=models.PROTECT, related_name="job_usages")
+    quantity_used = models.DecimalField(max_digits=12, decimal_places=2)
+    used_by = models.ForeignKey("accounts.User", on_delete=models.SET_NULL, null=True, blank=True, related_name="job_parts_used")
+    created_at = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        ordering = ("created_at", "pk")
+        constraints = [
+            models.CheckConstraint(
+                condition=models.Q(quantity_used__gt=0),
+                name="job_part_usage_quantity_positive",
+            ),
+        ]
+
+    def clean(self):
+        super().clean()
+        if self.part_id and self.workshop_id and self.part.workshop_id != self.workshop_id:
+            raise ValidationError({"part": "Il ricambio deve appartenere alla stessa officina."})
+        if self.job_id and self.workshop_id and self.job.workshop_id != self.workshop_id:
+            raise ValidationError({"job": "La lavorazione deve appartenere alla stessa officina."})
+        if self.quantity_used <= 0:
+            raise ValidationError({"quantity_used": "La quantità deve essere maggiore di zero."})
+
+
 class WarrantyClaim(models.Model):
     STATUS_CHOICES = [(v, v.replace("_", " ").title()) for v in ("submitted", "in_review", "approved", "partially_approved", "declined")]
     workshop = models.ForeignKey("workshops.Workshop", on_delete=models.CASCADE, related_name="warranty_claims")

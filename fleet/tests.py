@@ -1,11 +1,78 @@
+from decimal import Decimal
+from io import StringIO
+
+from django.contrib.auth import get_user_model
+from django.core.management import call_command
 from django.test import TestCase
+from django.urls import reverse
+from django.utils import timezone
 
 from clientandsuppliers.models import CamperOwner
-from orders.models import WorkOrder
-from workshops.models import Workshop
+from orders.models import Job, PauseReason, WorkOrder
+from parts.models import Part, PartMovement
+from workshops.models import Membership, Role, Workshop
 
 from .forms import WorkOrderForm
-from .models import Camper
+from .models import Camper, JobPartUsage, JobParticipation, Notification, PartsRequest, TimeEvent
+
+
+class PopulateDemoDataCommandTests(TestCase):
+    def setUp(self):
+        self.workshop = Workshop.objects.create(
+            name="Demo workshop",
+            slug="populate-demo-workshop",
+            country="US",
+        )
+
+    def _run_command(self):
+        call_command(
+            "populate_demo_data",
+            workshop=self.workshop.slug,
+            stdout=StringIO(),
+        )
+
+    def test_command_populates_requested_counts_and_is_idempotent(self):
+        self._run_command()
+
+        self.assertEqual(
+            CamperOwner.objects.filter(
+                workshop=self.workshop,
+                kind__in=("customer", "both"),
+            ).count(),
+            100,
+        )
+        self.assertEqual(Part.objects.filter(workshop=self.workshop).count(), 1000)
+        self.assertEqual(WorkOrder.objects.filter(workshop=self.workshop).count(), 10)
+        self.assertEqual(Job.objects.filter(workshop=self.workshop).count(), 30)
+        self.assertEqual(PartsRequest.objects.filter(workshop=self.workshop).count(), 20)
+        self.assertEqual(
+            WorkOrder.objects.filter(workshop=self.workshop, status="completed").count(),
+            3,
+        )
+        self.assertEqual(
+            PartsRequest.objects.filter(workshop=self.workshop, status="delivered").count(),
+            13,
+        )
+        self.assertEqual(
+            PartsRequest.objects.filter(workshop=self.workshop, status="pending").count(),
+            7,
+        )
+        self.assertEqual(PartMovement.objects.filter(workshop=self.workshop).count(), 13)
+        stock_before_rerun = dict(
+            Part.objects.filter(workshop=self.workshop).values_list("pk", "quantity")
+        )
+
+        self._run_command()
+
+        self.assertEqual(Part.objects.filter(workshop=self.workshop).count(), 1000)
+        self.assertEqual(WorkOrder.objects.filter(workshop=self.workshop).count(), 10)
+        self.assertEqual(Job.objects.filter(workshop=self.workshop).count(), 30)
+        self.assertEqual(PartsRequest.objects.filter(workshop=self.workshop).count(), 20)
+        self.assertEqual(PartMovement.objects.filter(workshop=self.workshop).count(), 13)
+        self.assertEqual(
+            dict(Part.objects.filter(workshop=self.workshop).values_list("pk", "quantity")),
+            stock_before_rerun,
+        )
 
 
 class WorkOrderFormTests(TestCase):
@@ -64,3 +131,304 @@ class WorkOrderFormTests(TestCase):
 
         self.assertFalse(form.is_valid())
         self.assertIn("vehicle", form.errors)
+
+
+class JobPartsWorkflowTests(TestCase):
+    def setUp(self):
+        self.workshop = Workshop.objects.create(name="Parts workshop", slug="parts-workshop")
+        role = Role.objects.create(workshop=self.workshop, name="Workshop staff", code="workshop-staff")
+        user_model = get_user_model()
+        self.mechanic = user_model.objects.create_user(
+            "mechanic", "mechanic@example.test", "password", department="technician"
+        )
+        self.parts_user = user_model.objects.create_user(
+            "warehouse", "warehouse@example.test", "password", department="parts"
+        )
+        Membership.objects.create(user=self.mechanic, workshop=self.workshop, role=role)
+        self.parts_membership = Membership.objects.create(
+            user=self.parts_user, workshop=self.workshop, role=role
+        )
+        self.customer = CamperOwner.objects.create(
+            workshop=self.workshop, kind="customer", first_name="Ada", last_name="Lovelace"
+        )
+        self.camper = Camper.objects.create(
+            workshop=self.workshop, owner=self.customer, internal_number="CAMP-PARTS", plate="PARTS-001"
+        )
+        self.work_order = WorkOrder.objects.create(
+            workshop=self.workshop, vehicle=self.camper, customer=self.customer, ro_number="RO-TEST-1"
+        )
+        self.job = Job.objects.create(
+            workshop=self.workshop, work_order=self.work_order, title="Replace filter", job_number=1
+        )
+        self.part = Part.objects.create(
+            workshop=self.workshop, part_number="FILTER-1", name="Oil filter", unit="pz", quantity=10
+        )
+        self.part2 = Part.objects.create(
+            workshop=self.workshop, part_number="SEAL-1", name="Seal", unit="scatola", quantity=4
+        )
+        self.participation = JobParticipation.objects.create(
+            workshop=self.workshop, job=self.job, mechanic=self.mechanic,
+            started_at=timezone.now(), is_active=True,
+        )
+        self.client.force_login(self.mechanic)
+
+    def _request_payload(self, rows):
+        prefix = f"parts-{self.job.pk}"
+        payload = {
+            f"{prefix}-TOTAL_FORMS": str(len(rows)),
+            f"{prefix}-INITIAL_FORMS": "0",
+            f"{prefix}-MIN_NUM_FORMS": "0",
+            f"{prefix}-MAX_NUM_FORMS": "1000",
+        }
+        for index, row in enumerate(rows):
+            payload.update({
+                f"{prefix}-{index}-part": row.get("part", ""),
+                f"{prefix}-{index}-quantity_requested": row.get("quantity", ""),
+                f"{prefix}-{index}-notes": row.get("notes", ""),
+            })
+        return payload
+
+    def _completion_payload(self, rows=(), confirmed=True):
+        prefix = f"used-parts-{self.job.pk}"
+        payload = {
+            f"{prefix}-TOTAL_FORMS": str(len(rows) or 1),
+            f"{prefix}-INITIAL_FORMS": "0",
+            f"{prefix}-MIN_NUM_FORMS": "0",
+            f"{prefix}-MAX_NUM_FORMS": "1000",
+        }
+        for index, row in enumerate(rows):
+            payload[f"{prefix}-{index}-part"] = row.get("part", "")
+            payload[f"{prefix}-{index}-quantity_used"] = row.get("quantity", "")
+        if not rows:
+            payload[f"{prefix}-0-part"] = ""
+            payload[f"{prefix}-0-quantity_used"] = ""
+        if confirmed:
+            payload["parts_used_confirmed"] = "1"
+        return payload
+
+    def test_job_request_creates_multiple_lines_and_notifies_warehouse(self):
+        response = self.client.post(
+            reverse("job_parts_request", args=(self.job.pk,)),
+            self._request_payload([
+                {"part": str(self.part.pk), "quantity": "2"},
+                {"part": str(self.part2.pk), "quantity": "1"},
+            ]),
+        )
+
+        self.assertEqual(response.status_code, 302)
+        requests = list(PartsRequest.objects.order_by("pk"))
+        self.assertEqual(len(requests), 2)
+        self.assertTrue(all(item.job_id == self.job.pk for item in requests))
+        self.assertTrue(all(item.work_order_id == self.work_order.pk for item in requests))
+        self.assertEqual(requests[0].part, self.part)
+        self.assertEqual(requests[0].unit, "pz")
+        self.assertEqual(requests[1].part, self.part2)
+        self.assertEqual(requests[1].unit, "scatola")
+        self.assertEqual(
+            Notification.objects.filter(user=self.parts_user, work_order=self.work_order).count(), 1
+        )
+
+    def test_job_request_falls_back_to_workshop_notification_without_warehouse_users(self):
+        self.parts_membership.is_active = False
+        self.parts_membership.save(update_fields=("is_active",))
+        self.client.post(
+            reverse("job_parts_request", args=(self.job.pk,)),
+            self._request_payload([{"part": str(self.part.pk), "quantity": "1"}]),
+        )
+
+        notification = Notification.objects.get(work_order=self.work_order)
+        self.assertIsNone(notification.user_id)
+
+    def test_mechanic_without_active_session_cannot_request_parts(self):
+        self.participation.is_active = False
+        self.participation.save(update_fields=("is_active",))
+
+        response = self.client.post(
+            reverse("job_parts_request", args=(self.job.pk,)),
+            self._request_payload([{"part": str(self.part.pk), "quantity": "1"}]),
+        )
+
+        self.assertEqual(response.status_code, 403)
+        self.assertFalse(PartsRequest.objects.exists())
+
+    def test_technician_can_see_dashboard_link_and_personal_dashboard(self):
+        response = self.client.get(reverse("home"))
+
+        self.assertEqual(response.status_code, 200)
+        self.assertContains(response, 'class="sidebar-dashboard"')
+        self.assertContains(response, "My active sessions")
+        self.assertContains(response, self.job.title)
+
+    def test_orders_menu_lists_work_orders_before_quotes(self):
+        office_user = get_user_model().objects.create_user(
+            "orders-office", "orders-office@example.test", "password", department="reception"
+        )
+        Membership.objects.create(
+            user=office_user, workshop=self.workshop, role=self.mechanic.memberships.get().role
+        )
+        self.client.force_login(office_user)
+
+        response = self.client.get(reverse("home"))
+
+        self.assertEqual(response.status_code, 200)
+        self.assertContains(response, "Workshop jobs")
+        content = response.content.decode()
+        orders_group = content.index('<summary class="sidebar-label">Orders</summary>')
+        work_orders_link = content.index(f'href="{reverse("orders")}"', orders_group)
+        quotes_link = content.index(f'href="{reverse("quotes")}"', orders_group)
+        self.assertLess(work_orders_link, quotes_link)
+
+    def test_my_jobs_displays_inline_request_formset(self):
+        response = self.client.get(reverse("my_jobs"))
+
+        self.assertEqual(response.status_code, 200)
+        self.assertContains(response, '<option value="" selected disabled></option>')
+        self.assertContains(response, "Active")
+        self.assertContains(response, "Finish session and record parts used")
+        self.assertContains(response, reverse("job_parts_request", args=(self.job.pk,)))
+        self.assertContains(response, "parts-%s-TOTAL_FORMS" % self.job.pk)
+        self.assertContains(response, "data-confirm=")
+        self.assertContains(response, "data-part-search")
+        self.assertContains(response, 'data-search="filter-1 oil filter"')
+        self.assertContains(response, 'data-unit="pz"')
+        self.assertContains(response, "data-part-unit-output")
+        self.assertNotContains(response, "Other part")
+
+    def test_paused_session_shows_reason_and_resume_action(self):
+        reason = PauseReason.objects.create(code="waiting", label="Waiting for approval")
+        self.participation.paused_at = timezone.now()
+        self.participation.save(update_fields=("paused_at",))
+        TimeEvent.objects.create(
+            workshop=self.workshop,
+            job=self.job,
+            mechanic=self.mechanic,
+            event_type="pause",
+            pause_reason=reason,
+            event_at=self.participation.paused_at,
+        )
+
+        response = self.client.get(reverse("my_jobs"))
+
+        self.assertEqual(response.status_code, 200)
+        self.assertContains(response, "Paused")
+        self.assertContains(response, "Waiting for approval")
+        self.assertContains(response, "Resume timer")
+
+    def test_recent_closed_session_is_visible(self):
+        self.participation.is_active = False
+        self.participation.finished_at = timezone.now()
+        self.participation.save(update_fields=("is_active", "finished_at"))
+
+        response = self.client.get(reverse("my_jobs"))
+
+        self.assertEqual(response.status_code, 200)
+        self.assertContains(response, "Recent sessions")
+        self.assertContains(response, "Session closed")
+        self.assertContains(response, self.job.title)
+
+    def test_pause_requires_an_explicit_reason(self):
+        response = self.client.post(
+            reverse("job_action", args=(self.job.pk, "pause")),
+            {"pause_reason": ""},
+        )
+
+        self.assertEqual(response.status_code, 302)
+        self.participation.refresh_from_db()
+        self.assertTrue(self.participation.is_active)
+        self.assertIsNone(self.participation.paused_at)
+        self.assertFalse(TimeEvent.objects.filter(job=self.job, event_type="pause").exists())
+
+    def test_finish_session_records_additional_stock_usage_atomically(self):
+        response = self.client.post(
+            reverse("job_complete", args=(self.job.pk,)),
+            self._completion_payload([{"part": str(self.part.pk), "quantity": "3"}]),
+        )
+
+        self.assertEqual(response.status_code, 302)
+        self.part.refresh_from_db()
+        self.participation.refresh_from_db()
+        self.job.refresh_from_db()
+        self.assertEqual(self.part.quantity, Decimal("7"))
+        self.assertFalse(self.participation.is_active)
+        self.assertEqual(self.job.status, "completed")
+        self.assertEqual(JobPartUsage.objects.get().quantity_used, Decimal("3"))
+        movement = PartMovement.objects.get()
+        self.assertEqual(movement.movement_type, "out")
+        self.assertEqual(movement.quantity, Decimal("3"))
+        self.assertTrue(TimeEvent.objects.filter(job=self.job, event_type="finish").exists())
+
+    def test_finish_session_requires_confirmation_even_when_no_parts_were_used(self):
+        response = self.client.post(
+            reverse("job_complete", args=(self.job.pk,)),
+            self._completion_payload(confirmed=False),
+        )
+
+        self.assertEqual(response.status_code, 200)
+        self.assertTrue(response.context["confirmation_error"])
+        self.participation.refresh_from_db()
+        self.assertTrue(self.participation.is_active)
+        self.assertFalse(JobPartUsage.objects.exists())
+
+    def test_insufficient_stock_keeps_session_active_and_records_nothing(self):
+        self.part.quantity = Decimal("2")
+        self.part.save(update_fields=("quantity",))
+        response = self.client.post(
+            reverse("job_complete", args=(self.job.pk,)),
+            self._completion_payload([{"part": str(self.part.pk), "quantity": "3"}]),
+        )
+
+        self.assertEqual(response.status_code, 200)
+        self.part.refresh_from_db()
+        self.participation.refresh_from_db()
+        self.assertEqual(self.part.quantity, Decimal("2"))
+        self.assertTrue(self.participation.is_active)
+        self.assertFalse(JobPartUsage.objects.exists())
+        self.assertFalse(PartMovement.objects.exists())
+
+    def test_delivered_request_is_not_decremented_again_at_session_finish(self):
+        self.part.quantity = Decimal("8")
+        self.part.save(update_fields=("quantity",))
+        PartsRequest.objects.create(
+            workshop=self.workshop,
+            work_order=self.work_order,
+            job=self.job,
+            part=self.part,
+            quantity_requested=Decimal("2"),
+            quantity_delivered=Decimal("2"),
+            status="delivered",
+            inventory_applied=True,
+        )
+
+        self.client.post(
+            reverse("job_complete", args=(self.job.pk,)),
+            self._completion_payload(),
+        )
+
+        self.part.refresh_from_db()
+        self.assertEqual(self.part.quantity, Decimal("8"))
+        self.assertFalse(JobPartUsage.objects.exists())
+
+    def test_work_order_pdf_renders_stock_usage(self):
+        user_model = get_user_model()
+        office_user = user_model.objects.create_user(
+            "office", "office@example.test", "password", department="reception"
+        )
+        Membership.objects.create(
+            user=office_user, workshop=self.workshop, role=self.mechanic.memberships.get().role
+        )
+        self.work_order.status = "completed"
+        self.work_order.completed_at = timezone.now()
+        self.work_order.save(update_fields=("status", "completed_at"))
+        JobPartUsage.objects.create(
+            workshop=self.workshop, job=self.job, part=self.part,
+            quantity_used=Decimal("1"), used_by=self.mechanic,
+        )
+        self.client.force_login(office_user)
+
+        response = self.client.post(
+            reverse("work_order_report", args=(self.work_order.pk,)), {"mark_invoiced": "0"}
+        )
+
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(response["Content-Type"], "application/pdf")
+        self.assertTrue(response.content.startswith(b"%PDF"))

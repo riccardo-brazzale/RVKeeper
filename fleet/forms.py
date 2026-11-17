@@ -1,10 +1,13 @@
 from django import forms
+from django.forms import BaseFormSet, formset_factory
 from django.utils.translation import gettext_lazy as _
+from decimal import Decimal
 
 from clientandsuppliers.models import CamperOwner
 from orders.models import WorkOrder
 from .models import Camper, CamperPhoto
 from parts.forms import PartDocumentForm, PartSupplierOfferForm
+from parts.models import Part
 
 
 class CamperForm(forms.ModelForm):
@@ -206,3 +209,106 @@ class CamperPhotoForm(forms.ModelForm):
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
         self.fields["category"].queryset = self.fields["category"].queryset.filter(is_active=True)
+
+
+class PartChoiceSelect(forms.Select):
+    def __init__(self, *args, part_units=None, part_search=None, **kwargs):
+        super().__init__(*args, **kwargs)
+        self.part_units = part_units or {}
+        self.part_search = part_search or {}
+
+    def create_option(self, name, value, label, selected, index, subindex=None, attrs=None):
+        option = super().create_option(name, value, label, selected, index, subindex, attrs)
+        key = str(value)
+        unit = self.part_units.get(key)
+        if unit:
+            option["attrs"]["data-unit"] = unit
+        search_text = self.part_search.get(key)
+        if search_text:
+            option["attrs"]["data-search"] = search_text
+        return option
+
+
+class PartsRequestLineForm(forms.Form):
+    part = forms.ModelChoiceField(queryset=Part.objects.none(), required=False, label=_("Catalog part"))
+    quantity_requested = forms.DecimalField(
+        max_digits=12, decimal_places=2, min_value=Decimal("0.01"), required=False, label=_("Quantity")
+    )
+    notes = forms.CharField(required=False, label=_("Notes"), widget=forms.TextInput())
+
+    def __init__(self, *args, workshop, **kwargs):
+        super().__init__(*args, **kwargs)
+        parts = Part.objects.filter(workshop=workshop)
+        self.fields["part"].queryset = parts
+        part_widget = PartChoiceSelect(
+            attrs={"data-part-select": ""},
+            part_units={str(part.pk): part.unit for part in parts},
+            part_search={str(part.pk): f"{part.part_number} {part.name}".casefold() for part in parts},
+        )
+        part_widget.choices = self.fields["part"].choices
+        self.fields["part"].widget = part_widget
+
+    def clean(self):
+        cleaned_data = super().clean()
+        part = cleaned_data.get("part")
+        quantity = cleaned_data.get("quantity_requested")
+        notes = cleaned_data.get("notes", "").strip()
+        if not any((part, quantity, notes)):
+            return cleaned_data
+        if not part:
+            self.add_error("part", _("Choose a catalog part."))
+        if quantity is None:
+            self.add_error("quantity_requested", _("Enter a quantity greater than zero."))
+        return cleaned_data
+
+
+class NonEmptyPartsRequestFormSet(BaseFormSet):
+    def clean(self):
+        super().clean()
+        if any(self.errors):
+            return
+        has_request = any(
+            form.cleaned_data
+            and not form.cleaned_data.get("DELETE")
+            and form.cleaned_data.get("part")
+            for form in self.forms
+        )
+        if not has_request:
+            raise forms.ValidationError(_("Add at least one part before sending the request."))
+
+
+class PartsUsageLineForm(forms.Form):
+    part = forms.ModelChoiceField(queryset=Part.objects.none(), required=False, label=_("Catalog part"))
+    quantity_used = forms.DecimalField(
+        max_digits=12, decimal_places=2, min_value=Decimal("0.01"), required=False, label=_("Quantity used")
+    )
+
+    def __init__(self, *args, workshop, **kwargs):
+        super().__init__(*args, **kwargs)
+        parts = Part.objects.filter(workshop=workshop)
+        self.fields["part"].queryset = parts
+        part_widget = PartChoiceSelect(
+            attrs={"data-part-select": ""},
+            part_units={str(part.pk): part.unit for part in parts},
+            part_search={str(part.pk): f"{part.part_number} {part.name}".casefold() for part in parts},
+        )
+        part_widget.choices = self.fields["part"].choices
+        self.fields["part"].widget = part_widget
+
+    def clean(self):
+        cleaned_data = super().clean()
+        part = cleaned_data.get("part")
+        quantity = cleaned_data.get("quantity_used")
+        if not part and quantity is None:
+            return cleaned_data
+        if not part:
+            self.add_error("part", _("Choose a catalog part."))
+        if quantity is None:
+            self.add_error("quantity_used", _("Enter a quantity greater than zero."))
+        return cleaned_data
+
+
+PartsRequestFormSet = formset_factory(
+    PartsRequestLineForm, formset=NonEmptyPartsRequestFormSet, extra=1, can_delete=True
+)
+PartsUsageFormSet = formset_factory(PartsUsageLineForm, extra=1, can_delete=True)

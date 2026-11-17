@@ -1,13 +1,23 @@
-from datetime import date
+from datetime import date, timedelta
+from decimal import Decimal
 
 from django.core.management.base import BaseCommand, CommandError
 from django.db import transaction
+from django.utils import timezone
 
 from clientandsuppliers.models import CamperOwner
-from fleet.models import Camper
-from parts.models import Part, PartSupplierOffer
+from fleet.models import Camper, PartsRequest
+from orders.models import Job, WorkOrder
+from parts.models import Part, PartMovement, PartSupplierOffer
 from workshops.models import Workshop
 
+
+DEMO_CUSTOMER_COUNT = 100
+DEMO_PART_COUNT = 1000
+DEMO_WORK_ORDER_COUNT = 10
+DEMO_JOB_COUNT = 30
+DEMO_PART_REQUEST_COUNT = 20
+CLOSED_WORK_ORDER_COUNT = 3
 
 CONTACTS = [
     {
@@ -95,8 +105,45 @@ CAMPER_MODELS = [
 REGISTRATION_YEARS = [2017, 2019, 2021, 2018, 2022, 2016, 2023, 2020, 2015, 2024, 2019, 2022]
 
 
+def generated_customer_contacts():
+    existing_customers = sum(row["kind"] in ("customer", "both") for row in CONTACTS)
+    for index in range(1, DEMO_CUSTOMER_COUNT - existing_customers + 1):
+        yield {
+            "kind": "customer",
+            "first_name": "Demo",
+            "last_name": f"Customer {index:03d}",
+            "phone": f"+1-800-555-{index:04d}",
+            "email": f"demo.customer.{index:03d}@contacts.example",
+            "address": f"{100 + index} Demo Avenue",
+            "postal_code": f"{10000 + index:05d}",
+            "city": "Sample City",
+        }
+
+
+def generated_parts():
+    yield from PARTS
+    units = ("each", "set", "tube", "liter", "pack")
+    for index in range(len(PARTS) + 1, DEMO_PART_COUNT + 1):
+        cost = Decimal(5 + index % 1500)
+        sale = (cost * Decimal("1.4")).quantize(Decimal("0.01"))
+        yield (
+            f"DEMO-PART-{index:03d}",
+            f"Demo service part {index:04d}",
+            f"Fictional demo catalog item {index:04d} for workshop testing.",
+            units[index % len(units)],
+            str(cost),
+            str(sale),
+            8 + index % 20,
+            2 + index % 5,
+            f"DEMO-{(index - 1) // 100 + 1:02d}-{index % 100:02d}",
+        )
+
+
 class Command(BaseCommand):
-    help = "Popola un'officina USA con contatti, ricambi, offerte e camper fittizi, senza duplicare i record."
+    help = (
+        "Popola un'officina USA con 100 clienti demo, 1000 ricambi, camper, ordini, "
+        "lavorazioni e richieste di magazzino senza duplicare i record."
+    )
 
     def add_arguments(self, parser):
         parser.add_argument(
@@ -120,9 +167,24 @@ class Command(BaseCommand):
         if workshop is None:
             raise CommandError("Officina attiva non trovata. Lo slug deve indicare un'officina con country=US.")
 
-        counts = {"contacts": 0, "parts": 0, "offers": 0, "campers": 0}
+        counts = {
+            "contacts": 0,
+            "customers": 0,
+            "parts": 0,
+            "offers": 0,
+            "campers": 0,
+            "work_orders": 0,
+            "jobs": 0,
+            "parts_requests": 0,
+        }
+        demo_customer_emails = {
+            row["email"]
+            for row in CONTACTS
+            if row["kind"] in ("customer", "both")
+        }
+        demo_customer_emails.update(row["email"] for row in generated_customer_contacts())
         with transaction.atomic():
-            for row in CONTACTS:
+            for row in (*CONTACTS, *generated_customer_contacts()):
                 data = dict(row)
                 is_company = data.pop("is_company", False)
                 defaults = {
@@ -138,6 +200,7 @@ class Command(BaseCommand):
                 )
                 contact.full_clean()
                 counts["contacts"] += int(created)
+                counts["customers"] += int(created and contact.is_customer)
 
             suppliers = list(
                 CamperOwner.objects.filter(workshop=workshop, kind__in=("supplier", "both")).order_by("email")
@@ -149,7 +212,7 @@ class Command(BaseCommand):
                 raise CommandError("Impossibile creare offerte o camper: servono clienti e fornitori nell'officina.")
 
             parts = []
-            for index, row in enumerate(PARTS, start=1):
+            for index, row in enumerate(generated_parts(), start=1):
                 number, name, description, unit, cost, sale, quantity, min_stock, location = row
                 part, created = Part.objects.get_or_create(
                     workshop=workshop,
@@ -222,7 +285,185 @@ class Command(BaseCommand):
                 camper.full_clean()
                 counts["campers"] += int(created)
 
+            demo_campers = list(
+                Camper.objects.filter(
+                    workshop=workshop,
+                    internal_number__in=[
+                        f"DEMO-CAMP-{index:03d}" for index in range(1, len(CAMPER_MODELS) + 1)
+                    ],
+                ).select_related("owner").order_by("internal_number")
+            )
+            if len(demo_campers) < DEMO_WORK_ORDER_COUNT:
+                raise CommandError("Impossibile creare gli ordini demo: mancano camper demo.")
+
+            now = timezone.now()
+            demo_jobs = []
+            for order_index in range(1, DEMO_WORK_ORDER_COUNT + 1):
+                camper = demo_campers[(order_index - 1) % len(demo_campers)]
+                is_closed = order_index <= CLOSED_WORK_ORDER_COUNT
+                work_order, created = WorkOrder.objects.get_or_create(
+                    workshop=workshop,
+                    ro_number=f"DEMO-RO-{order_index:03d}",
+                    defaults={
+                        "customer": camper.owner,
+                        "vehicle": camper,
+                        "customer_name": str(camper.owner),
+                        "customer_phone": camper.owner.phone,
+                        "customer_email": camper.owner.email,
+                        "year": str(camper.registration_date.year) if camper.registration_date else "",
+                        "make": camper.brand,
+                        "model": camper.model,
+                        "odometer": camper.mileage,
+                        "work_classification": "customer_pay",
+                        "status": "completed" if is_closed else ("open" if order_index % 2 else "in_progress"),
+                        "completed_at": now - timedelta(days=order_index) if is_closed else None,
+                        "reception_notes": f"Fictional demo work order {order_index:03d}.",
+                    },
+                )
+                work_order.full_clean()
+                counts["work_orders"] += int(created)
+
+                for job_number in range(1, DEMO_JOB_COUNT // DEMO_WORK_ORDER_COUNT + 1):
+                    if is_closed:
+                        job_status = "completed"
+                    elif job_number == 1:
+                        job_status = "waiting_parts"
+                    elif job_number == 2:
+                        job_status = "in_progress"
+                    else:
+                        job_status = "not_started"
+                    job, job_created = Job.objects.get_or_create(
+                        workshop=workshop,
+                        work_order=work_order,
+                        job_number=job_number,
+                        defaults={
+                            "title": (
+                                "Demo maintenance inspection" if job_number == 1 else
+                                "Demo component replacement" if job_number == 2 else
+                                "Demo final quality check"
+                            ),
+                            "description": "Fictional sample work for demonstrating the workshop workflow.",
+                            "category": "customer_pay",
+                            "department": "technician",
+                            "specialty": ("engine", "general", "body")[job_number - 1],
+                            "status": job_status,
+                            "standard_minutes": 45 + job_number * 15,
+                            "started_at": now - timedelta(days=order_index) if job_status != "not_started" else None,
+                            "completed_at": now - timedelta(days=order_index) if is_closed else None,
+                        },
+                    )
+                    job.full_clean()
+                    counts["jobs"] += int(job_created)
+                    demo_jobs.append(job)
+
+            request_parts = parts[100:100 + DEMO_PART_REQUEST_COUNT]
+            for request_index in range(1, DEMO_PART_REQUEST_COUNT + 1):
+                order_index = (request_index - 1) // 2
+                job_index = order_index * 3 + (request_index - 1) % 2
+                work_order = demo_jobs[job_index].work_order
+                part = request_parts[request_index - 1]
+                delivered = (
+                    order_index < CLOSED_WORK_ORDER_COUNT
+                    or request_index % 2 == 0
+                )
+                request_number = f"DEMO-REQ-{request_index:03d}"
+                quantity = Decimal("1.00")
+                request, created = PartsRequest.objects.get_or_create(
+                    workshop=workshop,
+                    order_number=request_number,
+                    defaults={
+                        "work_order": work_order,
+                        "job": demo_jobs[job_index],
+                        "part": part,
+                        "unit": part.unit,
+                        "quantity_requested": quantity,
+                        "quantity_delivered": quantity if delivered else Decimal("0.00"),
+                        "unit_delivered": part.unit if delivered else "",
+                        "status": "delivered" if delivered else "pending",
+                        "delivered_at": now - timedelta(days=request_index) if delivered else None,
+                        "inventory_applied": delivered,
+                        "notes": f"Fictional demo warehouse request {request_number}.",
+                    },
+                )
+                request.full_clean()
+                counts["parts_requests"] += int(created)
+
+                if created and delivered:
+                    _, movement_created = PartMovement.objects.get_or_create(
+                        workshop=workshop,
+                        part=part,
+                        work_order=work_order,
+                        movement_type="out",
+                        note=f"Demo delivery {request_number}",
+                        defaults={"quantity": quantity, "unit_cost": part.cost_price},
+                    )
+                    if movement_created:
+                        part.quantity -= quantity
+                        part.save(update_fields=("quantity", "updated_at"))
+
+            actual_demo_customers = CamperOwner.objects.filter(
+                workshop=workshop,
+                email__in=demo_customer_emails,
+                kind__in=("customer", "both"),
+            ).count()
+            if actual_demo_customers != DEMO_CUSTOMER_COUNT:
+                raise CommandError(
+                    f"Attesi {DEMO_CUSTOMER_COUNT} clienti demo, trovati {actual_demo_customers}."
+                )
+            expected_counts = (
+                (
+                    "ricambi",
+                    Part.objects.filter(workshop=workshop, part_number__startswith="DEMO-PART-").count(),
+                    DEMO_PART_COUNT,
+                ),
+                (
+                    "ordini",
+                    WorkOrder.objects.filter(workshop=workshop, ro_number__startswith="DEMO-RO-").count(),
+                    DEMO_WORK_ORDER_COUNT,
+                ),
+                (
+                    "lavorazioni",
+                    Job.objects.filter(workshop=workshop, work_order__ro_number__startswith="DEMO-RO-").count(),
+                    DEMO_JOB_COUNT,
+                ),
+                (
+                    "richieste magazzino",
+                    PartsRequest.objects.filter(workshop=workshop, order_number__startswith="DEMO-REQ-").count(),
+                    DEMO_PART_REQUEST_COUNT,
+                ),
+            )
+            for label, actual, expected in expected_counts:
+                if actual != expected:
+                    raise CommandError(f"Attesi {expected} {label} demo, trovati {actual}.")
+            counts.update(
+                demo_customers_total=actual_demo_customers,
+                demo_parts_total=expected_counts[0][1],
+                demo_work_orders_total=expected_counts[1][1],
+                demo_jobs_total=expected_counts[2][1],
+                demo_parts_requests_total=expected_counts[3][1],
+                demo_closed_orders=WorkOrder.objects.filter(
+                    workshop=workshop,
+                    ro_number__startswith="DEMO-RO-",
+                    status="completed",
+                ).count(),
+                demo_delivered_requests=PartsRequest.objects.filter(
+                    workshop=workshop,
+                    order_number__startswith="DEMO-REQ-",
+                    status="delivered",
+                ).count(),
+                demo_open_requests=PartsRequest.objects.filter(
+                    workshop=workshop,
+                    order_number__startswith="DEMO-REQ-",
+                    status="pending",
+                ).count(),
+            )
+
         self.stdout.write(self.style.SUCCESS(f"Officina: {workshop.name} ({workshop.slug})"))
         self.stdout.write(
-            "Nuovi record - contatti: {contacts}, ricambi: {parts}, offerte: {offers}, camper: {campers}.".format(**counts)
+            "Nuovi record - contatti: {contacts}, ricambi: {parts}, offerte: {offers}, camper: {campers}, "
+            "ordini: {work_orders}, lavorazioni: {jobs}, richieste: {parts_requests}. "
+            "Totale demo - clienti: {demo_customers_total}, ricambi: {demo_parts_total}, "
+            "ordini: {demo_work_orders_total} (chiusi: {demo_closed_orders}), "
+            "lavorazioni: {demo_jobs_total}, richieste magazzino: {demo_parts_requests_total} "
+            "({demo_delivered_requests} consegnate, {demo_open_requests} aperte).".format(**counts)
         )
