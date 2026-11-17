@@ -1,9 +1,115 @@
 {% extends "base.html" %}
 {% load i18n %}
 {% block title %}{% translate "Reports" %} - RVKeeper{% endblock %}
-{% block content %}<h2>{% translate "Reports" %}</h2>
-<div class="summary-grid"><div class="panel"><strong>{% translate "Recorded work minutes" %}</strong><p class="metric">{{ total_minutes }}</p></div><div class="panel"><strong>{% translate "Open parts requests" %}</strong><p class="metric">{{ open_requests }}</p></div></div>
-<div class="panel"><h3>{% translate "Work orders by status" %}</h3>{% for row in orders %}<p>{{ row.status|title }}: {{ row.total }}</p>{% empty %}<p>{% translate "No data available." %}</p>{% endfor %}</div>
-<div class="panel"><h3>{% translate "Jobs by status" %}</h3>{% for row in jobs %}<p>{{ row.status|title }}: {{ row.total }}</p>{% empty %}<p>{% translate "No data available." %}</p>{% endfor %}</div>
-<div class="panel"><h3>{% translate "Time recorded by technician" %}</h3>{% for row in technician_time %}<p>{{ row.mechanic|default:_("Deleted user") }}: {{ row.minutes }} {% translate "minutes" %}</p>{% empty %}<p>{% translate "No data available." %}</p>{% endfor %}</div>
+{% block content %}
+<div class="page-heading">
+    <div>
+        <h2>{% translate "Orders and time report" %}</h2>
+        <p>{% translate "Filter detailed work sessions by technician and period." %}</p>
+    </div>
+</div>
+
+<section class="panel">
+    <form method="get" class="actions">
+        {% for field in form %}
+        <div class="form-field">
+            <label for="{{ field.id_for_label }}">{{ field.label }}</label>
+            {{ field }}
+            {% for error in field.errors %}<div class="form-errors">{{ error }}</div>{% endfor %}
+        </div>
+        {% endfor %}
+        <button type="submit">{% translate "Apply filters" %}</button>
+    </form>
+</section>
+
+{% if report_data %}
+<div class="summary-grid">
+    <section class="panel">
+        <strong>{% translate "Total recorded time" %}</strong>
+        <p class="metric">{{ report_data.total_hours }} {% translate "hours" %}</p>
+        <p>{{ report_data.total_minutes }} {% translate "minutes" %}</p>
+    </section>
+    <section class="panel">
+        <strong>{% translate "Work orders in period" %}</strong>
+        <p class="metric">{{ report_data.order_totals|length }}</p>
+    </section>
+</div>
+
+<div class="actions" style="margin: 16px 0">
+    <a class="button-link" href="{% url 'report' %}?date_from={{ period_start|date:'Y-m-d' }}&amp;date_to={{ period_end|date:'Y-m-d' }}&amp;technician={{ selected_technician.pk|default:''|urlencode }}&amp;export=pdf">{% translate "Export PDF" %}</a>
+    <a class="button-link" href="{% url 'report' %}?date_from={{ period_start|date:'Y-m-d' }}&amp;date_to={{ period_end|date:'Y-m-d' }}&amp;technician={{ selected_technician.pk|default:''|urlencode }}&amp;export=xlsx">{% translate "Export Excel" %}</a>
+</div>
+
+<section class="panel">
+    <h3>{% translate "Detailed sessions" %}</h3>
+    <div class="table-wrap">
+        <table>
+            <thead>
+                <tr>
+                    <th>{% translate "Work order" %}</th>
+                    <th>{% translate "Order date" %}</th>
+                    <th>{% translate "Customer" %}</th>
+                    <th>{% translate "Vehicle" %}</th>
+                    <th>{% translate "Job" %}</th>
+                    <th>{% translate "Technician" %}</th>
+                    <th>{% translate "Start" %}</th>
+                    <th>{% translate "End" %}</th>
+                    <th>{% translate "Minutes" %}</th>
+                    <th>{% translate "Hours" %}</th>
+                </tr>
+            </thead>
+            <tbody>
+                {% for row in report_data.rows %}
+                <tr>
+                    <td><a href="{% url 'work_order_detail' pk=row.order.pk %}">{{ row.order_number }}</a></td>
+                    <td>{{ row.order_date|date:"d/m/Y" }}</td>
+                    <td>{{ row.customer|default:"—" }}</td>
+                    <td>{{ row.vehicle|default:"—" }}</td>
+                    <td>{{ row.job.title }}</td>
+                    <td>{{ row.technician.get_full_name|default:row.technician.username }}</td>
+                    <td>{{ row.started_at|date:"d/m/Y H:i" }}</td>
+                    <td>{{ row.ended_at|date:"d/m/Y H:i" }}</td>
+                    <td>{{ row.minutes }}</td>
+                    <td>{{ row.hours }}</td>
+                </tr>
+                {% empty %}
+                <tr><td colspan="10">{% translate "No sessions were recorded in the selected period." %}</td></tr>
+                {% endfor %}
+            </tbody>
+            <tfoot>
+                <tr><th colspan="8">{% translate "Period total" %}</th><th>{{ report_data.total_minutes }}</th><th>{{ report_data.total_hours }}</th></tr>
+            </tfoot>
+        </table>
+    </div>
+</section>
+
+<div class="summary-grid" style="margin-top: 18px">
+    <section class="panel">
+        <h3>{% translate "Totals by work order" %}</h3>
+        <div class="table-wrap">
+            <table>
+                <thead><tr><th>{% translate "Work order" %}</th><th>{% translate "Customer" %}</th><th>{% translate "Minutes" %}</th><th>{% translate "Hours" %}</th></tr></thead>
+                <tbody>
+                    {% for total in report_data.order_totals %}
+                    <tr><td>{{ total.order.ro_number }}</td><td>{{ total.customer|default:"—" }}</td><td>{{ total.minutes }}</td><td>{{ total.hours }}</td></tr>
+                    {% empty %}<tr><td colspan="4">{% translate "No data available." %}</td></tr>{% endfor %}
+                </tbody>
+            </table>
+        </div>
+    </section>
+    <section class="panel">
+        <h3>{% translate "Totals by technician" %}</h3>
+        <div class="table-wrap">
+            <table>
+                <thead><tr><th>{% translate "Technician" %}</th><th>{% translate "Minutes" %}</th><th>{% translate "Hours" %}</th></tr></thead>
+                <tbody>
+                    {% for total in report_data.technician_totals %}
+                    <tr><td>{{ total.technician.get_full_name|default:total.technician.username }}</td><td>{{ total.minutes }}</td><td>{{ total.hours }}</td></tr>
+                    {% empty %}<tr><td colspan="3">{% translate "No data available." %}</td></tr>{% endfor %}
+                </tbody>
+            </table>
+        </div>
+    </section>
+</div>
+{% endif %}
 {% endblock %}

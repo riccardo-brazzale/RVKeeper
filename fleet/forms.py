@@ -1,7 +1,10 @@
+from decimal import Decimal
+
 from django import forms
+from django.contrib.auth import get_user_model
+from django.db.models import Q
 from django.forms import BaseFormSet, formset_factory
 from django.utils.translation import gettext_lazy as _
-from decimal import Decimal
 
 from clientandsuppliers.models import CamperOwner
 from orders.models import WorkOrder
@@ -13,6 +16,49 @@ from parts.models import Part
 class CustomerChoiceField(forms.ModelChoiceField):
     def label_from_instance(self, contact):
         return f"{contact.customer_code} · {contact}" if contact.customer_code else str(contact)
+
+
+class TechnicianChoiceField(forms.ModelChoiceField):
+    def label_from_instance(self, user):
+        return user.get_full_name() or user.username
+
+
+class TimeReportFilterForm(forms.Form):
+    technician = TechnicianChoiceField(
+        queryset=get_user_model().objects.none(),
+        required=False,
+        label=_("Technician"),
+        empty_label=_("All technicians"),
+    )
+    date_from = forms.DateField(
+        label=_("From"),
+        widget=forms.DateInput(attrs={"type": "date"}),
+    )
+    date_to = forms.DateField(
+        label=_("To"),
+        widget=forms.DateInput(attrs={"type": "date"}),
+    )
+
+    def __init__(self, *args, workshop, **kwargs):
+        super().__init__(*args, **kwargs)
+        user_model = get_user_model()
+        self.fields["technician"].queryset = (
+            user_model.objects.filter(department="technician")
+            .filter(
+                Q(memberships__workshop=workshop, memberships__is_active=True)
+                | Q(time_events__workshop=workshop)
+            )
+            .distinct()
+            .order_by("first_name", "last_name", "username")
+        )
+
+    def clean(self):
+        cleaned_data = super().clean()
+        start = cleaned_data.get("date_from")
+        end = cleaned_data.get("date_to")
+        if start and end and start > end:
+            self.add_error("date_to", _("The end date must be on or after the start date."))
+        return cleaned_data
 
 
 class CamperForm(forms.ModelForm):

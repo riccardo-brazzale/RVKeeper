@@ -46,6 +46,7 @@ Questa nota descrive il repository dopo la riprogettazione dello schema. Le migr
 | Interfaccia | Template Django, CSS responsive e navigazione asincrona desktop |
 | Autenticazione | Django Auth con modello utente personalizzato |
 | PDF | `reportlab` (intervallo `>=4.2,<5`) |
+| Excel XLSX | `openpyxl==3.1.5` |
 | Immagini | Pillow |
 | Lingue dichiarate | inglese e italiano nel settings; lingua utente anche francese, tedesco e spagnolo |
 | Fuso orario Django | UTC, con `USE_TZ=True` |

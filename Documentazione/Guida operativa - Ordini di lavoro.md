@@ -73,6 +73,10 @@ Se emergono ulteriori interventi, usare **Lavori aggiuntivi** invece di chiudere
 
 Quando l’OdL è **Chiuso**, nel gruppo **Ordini** → voce **Ordini**, l’ufficio può generare **Prospetto PDF** dalla sua riga. Il documento riepiloga i ricambi consegnati e quelli aggiuntivi consumati da giacenza, oltre a tempi e manodopera; è un riepilogo non fiscale e non sostituisce la fattura. Alla prima generazione si può confermare la marcatura come fatturato; annullando la conferma il PDF si apre senza modificare il flag di fatturazione.
 
+### Report di ordini e tempi per tecnico
+
+Nel gruppo **Reports** è disponibile il consuntivo delle sessioni, filtrabile per tecnico e intervallo di date (all’apertura mostra il mese corrente). Il dettaglio riporta per ogni sessione l’ordine, la lavorazione, il tecnico, l’inizio, la fine e la durata; gli intervalli che attraversano i confini del periodo vengono conteggiati solo per la parte inclusa. La pagina mostra inoltre i totali per ordine e per tecnico. **Esporta PDF** e **Esporta Excel** scaricano lo stesso dettaglio e gli stessi totali; il file Excel contiene fogli separati per dettaglio, totali per ordine e totali per tecnico. È un consuntivo dei tempi registrati, non una fattura.
+
 ## Stati: ordine e lavorazione
 
 | Oggetto | Stati |

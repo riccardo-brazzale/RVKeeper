@@ -5,22 +5,24 @@ from django.db import models, transaction
 from django.db.models import Count, Sum
 from django.forms import modelform_factory
 from django.core import serializers
-from django.http import Http404, HttpResponse, HttpResponseForbidden, HttpResponseNotAllowed, JsonResponse
+from django.http import Http404, HttpResponse, HttpResponseBadRequest, HttpResponseForbidden, HttpResponseNotAllowed, JsonResponse
 from django.shortcuts import get_object_or_404, redirect, render
 from django.utils import timezone
 from django.utils.translation import gettext_lazy as _
 from io import BytesIO
 from decimal import Decimal
+from datetime import datetime, time, timedelta
 from xml.sax.saxutils import escape
 
 from workshops.models import Membership
 from workshops.models import Role, Workshop
 from .forms import (
-    CamperForm, CamperPhotoForm, PartsRequestFormSet, PartsUsageFormSet, WorkOrderForm,
+    CamperForm, CamperPhotoForm, PartsRequestFormSet, PartsUsageFormSet, TimeReportFilterForm, WorkOrderForm,
 )
 from .models import (Attachment, AuditLog, Camper, CamperPhoto, DocumentCategory, JobAssignment,
                      JobNote, JobPartUsage, JobParticipation, Notification, PartsRequest, TimeEvent,
                      WarrantyClaim, WarrantyReturn)
+from .time_reporting import build_time_report, export_time_report_excel, export_time_report_pdf
 from clientandsuppliers.models import CamperOwner
 from orders.models import Job, JobCall, LaborArticle, PauseReason, WorkOrder, next_ro_number
 from parts.models import Part, PartDocument, PartMovement, PartSupplierOffer
@@ -1387,31 +1389,63 @@ def mark_notifications_read(request):
 @login_required
 def report(request):
     workshop = _workshop_or_redirect(request)
-    if workshop is None: return redirect("home")
-    time_by_mechanic = {}
-    total_minutes = 0
-    for job in Job.objects.filter(workshop=workshop).prefetch_related("time_events__mechanic"):
-        running, seconds_by_user = {}, {}
-        for event in job.time_events.order_by("event_at", "pk"):
-            key = event.mechanic_id
-            if event.event_type in ("start", "resume"):
-                running[key] = event.event_at
-            elif event.event_type in ("pause", "finish", "waiting") and key in running:
-                seconds_by_user[key] = seconds_by_user.get(key, 0) + max(0, (event.event_at - running.pop(key)).total_seconds())
-        for key, started in running.items():
-            seconds_by_user[key] = seconds_by_user.get(key, 0) + max(0, (timezone.now() - started).total_seconds())
-        for key, seconds in seconds_by_user.items():
-            minutes = int(seconds // 60)
-            time_by_mechanic[key] = time_by_mechanic.get(key, 0) + minutes
-            total_minutes += minutes
-    users = request.user.__class__.objects.in_bulk(time_by_mechanic.keys())
-    technician_rows = [{"mechanic": users.get(key), "minutes": value} for key, value in time_by_mechanic.items()]
+    if workshop is None:
+        return redirect("home")
+
+    today = timezone.localdate()
+    initial = {"date_from": today.replace(day=1), "date_to": today}
+    filters = request.GET.copy()
+    if request.GET:
+        filters.setdefault("date_from", initial["date_from"].isoformat())
+        filters.setdefault("date_to", initial["date_to"].isoformat())
+    form = TimeReportFilterForm(
+        filters if request.GET else None,
+        initial=initial,
+        workshop=workshop,
+    )
+    if not form.is_valid():
+        if request.GET.get("export"):
+            return HttpResponseBadRequest(_("Correct the report filters before exporting."))
+        return render(request, "fleet/report.html", {
+            "form": form,
+            "report_data": None,
+            "period_start": initial["date_from"],
+            "period_end": initial["date_to"],
+        })
+
+    date_from = form.cleaned_data["date_from"]
+    date_to = form.cleaned_data["date_to"]
+    period_start = timezone.make_aware(datetime.combine(date_from, time.min))
+    period_end = timezone.make_aware(datetime.combine(date_to + timedelta(days=1), time.min))
+    technician = form.cleaned_data["technician"]
+    report_data = build_time_report(workshop, period_start, period_end, technician)
+    export_format = request.GET.get("export", "")
+    if export_format == "pdf":
+        content = export_time_report_pdf(report_data, date_from, date_to, technician)
+        response = HttpResponse(content, content_type="application/pdf")
+        response["Content-Disposition"] = (
+            f'attachment; filename="consuntivo-{date_from:%Y%m%d}-{date_to:%Y%m%d}.pdf"'
+        )
+        return response
+    if export_format in ("xlsx", "excel"):
+        content = export_time_report_excel(report_data, date_from, date_to, technician)
+        response = HttpResponse(
+            content,
+            content_type="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+        )
+        response["Content-Disposition"] = (
+            f'attachment; filename="consuntivo-{date_from:%Y%m%d}-{date_to:%Y%m%d}.xlsx"'
+        )
+        return response
+    if export_format:
+        return HttpResponseBadRequest(_("Unsupported report export format."))
+
     return render(request, "fleet/report.html", {
-        "orders": WorkOrder.objects.filter(workshop=workshop).values("status").annotate(total=Count("id")),
-        "jobs": Job.objects.filter(workshop=workshop).values("status").annotate(total=Count("id")),
-        "technician_time": technician_rows,
-        "total_minutes": total_minutes,
-        "open_requests": PartsRequest.objects.filter(workshop=workshop).exclude(status__in=("delivered", "cancelled")).count(),
+        "form": form,
+        "report_data": report_data,
+        "period_start": date_from,
+        "period_end": date_to,
+        "selected_technician": technician,
     })
 
 

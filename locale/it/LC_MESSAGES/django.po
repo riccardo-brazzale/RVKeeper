@@ -1326,3 +1326,69 @@ msgstr "Sessione chiusa"
 
 msgid "Ended"
 msgstr "Terminata"
+
+msgid "All technicians"
+msgstr "Tutti i tecnici"
+
+msgid "The end date must be on or after the start date."
+msgstr "La data finale deve essere uguale o successiva alla data iniziale."
+
+msgid "Correct the report filters before exporting."
+msgstr "Correggi i filtri del report prima dell'esportazione."
+
+msgid "Unsupported report export format."
+msgstr "Formato di esportazione non supportato."
+
+msgid "Orders and time report"
+msgstr "Report ordini e tempi"
+
+msgid "Filter detailed work sessions by technician and period."
+msgstr "Filtra il dettaglio delle sessioni per tecnico e periodo."
+
+msgid "Apply filters"
+msgstr "Applica filtri"
+
+msgid "Total recorded time"
+msgstr "Tempo totale registrato"
+
+msgid "Work orders in period"
+msgstr "Ordini di lavoro nel periodo"
+
+msgid "hours"
+msgstr "ore"
+
+msgid "Export PDF"
+msgstr "Esporta PDF"
+
+msgid "Export Excel"
+msgstr "Esporta Excel"
+
+msgid "Detailed sessions"
+msgstr "Sessioni dettagliate"
+
+msgid "Order date"
+msgstr "Data ordine"
+
+msgid "Start"
+msgstr "Inizio"
+
+msgid "End"
+msgstr "Fine"
+
+msgid "Minutes"
+msgstr "Minuti"
+
+msgid "Hours"
+msgstr "Ore"
+
+msgid "Period total"
+msgstr "Totale periodo"
+
+msgid "No sessions were recorded in the selected period."
+msgstr "Nessuna sessione registrata nel periodo selezionato."
+
+msgid "Totals by work order"
+msgstr "Totali per ordine di lavoro"
+
+msgid "Totals by technician"
+msgstr "Totali per tecnico"

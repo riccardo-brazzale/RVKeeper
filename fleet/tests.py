@@ -1,5 +1,6 @@
 from decimal import Decimal
-from io import StringIO
+from datetime import datetime
+from io import BytesIO, StringIO
 
 from django.contrib.auth import get_user_model
 from django.core.management import call_command
@@ -159,6 +160,94 @@ class WorkOrderFormTests(TestCase):
         self.assertIn("vehicle", form.errors)
 
 
+class TimeReportTests(TestCase):
+    def setUp(self):
+        self.workshop = Workshop.objects.create(name="Report workshop", slug="report-workshop")
+        role = Role.objects.create(workshop=self.workshop, name="Report staff", code="report-staff")
+        user_model = get_user_model()
+        self.office_user = user_model.objects.create_user(
+            "report-office", "report-office@example.test", "password", department="reception"
+        )
+        self.technician = user_model.objects.create_user(
+            "report-tech", "report-tech@example.test", "password", department="technician"
+        )
+        self.other_technician = user_model.objects.create_user(
+            "report-tech-2", "report-tech-2@example.test", "password", department="technician"
+        )
+        for user in (self.office_user, self.technician, self.other_technician):
+            Membership.objects.create(user=user, workshop=self.workshop, role=role)
+        self.work_order = WorkOrder.objects.create(
+            workshop=self.workshop,
+            ro_number="RO-REPORT-001",
+        )
+        self.job = Job.objects.create(
+            workshop=self.workshop,
+            work_order=self.work_order,
+            title="Replace water pump",
+            job_number=1,
+        )
+        self.client.force_login(self.office_user)
+
+    def _create_event(self, mechanic, event_type, day, hour, minute=0):
+        event_at = timezone.make_aware(datetime(2026, 3, day, hour, minute))
+        return TimeEvent.objects.create(
+            workshop=self.workshop,
+            job=self.job,
+            mechanic=mechanic,
+            event_type=event_type,
+            event_at=event_at,
+        )
+
+    def test_report_filters_by_technician_and_clips_sessions_to_period(self):
+        self._create_event(self.technician, "start", 9, 23, 30)
+        self._create_event(self.technician, "finish", 10, 0, 30)
+        self._create_event(self.technician, "start", 10, 9)
+        self._create_event(self.technician, "finish", 10, 10)
+        self._create_event(self.other_technician, "start", 10, 9)
+        self._create_event(self.other_technician, "finish", 10, 11)
+        self._create_event(self.technician, "start", 11, 9)
+        self._create_event(self.technician, "finish", 11, 11)
+
+        response = self.client.get(reverse("report"), {
+            "technician": self.technician.pk,
+            "date_from": "2026-03-10",
+            "date_to": "2026-03-10",
+        })
+
+        self.assertEqual(response.status_code, 200)
+        report_data = response.context["report_data"]
+        self.assertEqual(len(report_data["rows"]), 2)
+        self.assertEqual(report_data["total_minutes"], 90)
+        self.assertEqual(report_data["order_totals"][0]["minutes"], 90)
+        self.assertEqual(report_data["technician_totals"][0]["technician"], self.technician)
+
+    def test_report_exports_detailed_pdf_and_excel(self):
+        self._create_event(self.technician, "start", 10, 9)
+        self._create_event(self.technician, "finish", 10, 10)
+        filters = {
+            "technician": self.technician.pk,
+            "date_from": "2026-03-10",
+            "date_to": "2026-03-10",
+        }
+
+        pdf_response = self.client.get(reverse("report"), {**filters, "export": "pdf"})
+        self.assertEqual(pdf_response.status_code, 200)
+        self.assertEqual(pdf_response["Content-Type"], "application/pdf")
+        self.assertTrue(pdf_response.content.startswith(b"%PDF"))
+
+        excel_response = self.client.get(reverse("report"), {**filters, "export": "xlsx"})
+        self.assertEqual(
+            excel_response["Content-Type"],
+            "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+        )
+        from openpyxl import load_workbook
+
+        workbook = load_workbook(BytesIO(excel_response.content), read_only=True)
+        self.assertEqual(workbook.sheetnames, ["Dettaglio", "Totali ordine", "Totali tecnico"])
+        self.assertEqual(workbook["Dettaglio"].max_row, 7)
+        self.assertEqual(workbook["Dettaglio"]["A7"].value, self.work_order.ro_number)
+
+
 class JobPartsWorkflowTests(TestCase):
     def setUp(self):
         self.workshop = Workshop.objects.create(name="Parts workshop", slug="parts-workshop")
@@ -170,10 +259,14 @@ class JobPartsWorkflowTests(TestCase):
         self.parts_user = user_model.objects.create_user(
             "warehouse", "warehouse@example.test", "password", department="parts"
         )
+        self.reception_user = user_model.objects.create_user(
+            "reception", "reception@example.test", "password", department="reception"
+        )
         Membership.objects.create(user=self.mechanic, workshop=self.workshop, role=role)
         self.parts_membership = Membership.objects.create(
             user=self.parts_user, workshop=self.workshop, role=role
         )
+        Membership.objects.create(user=self.reception_user, workshop=self.workshop, role=role)
         self.customer = CamperOwner.objects.create(
             workshop=self.workshop, kind="customer", first_name="Ada", last_name="Lovelace"
         )
@@ -264,6 +357,69 @@ class JobPartsWorkflowTests(TestCase):
 
         notification = Notification.objects.get(work_order=self.work_order)
         self.assertIsNone(notification.user_id)
+
+    def test_expensive_part_request_requires_customer_and_reception_approval(self):
+        self.part.sale_price = Decimal("150.00")
+        self.part.save(update_fields=("sale_price",))
+
+        self.client.post(
+            reverse("job_parts_request", args=(self.job.pk,)),
+            self._request_payload([{"part": str(self.part.pk), "quantity": "1"}]),
+        )
+        item = PartsRequest.objects.get()
+        self.assertEqual(item.approval_status, "awaiting_customer")
+        self.assertEqual(item.customer_quoted_price, Decimal("150.00"))
+        self.assertTrue(
+            Notification.objects.filter(
+                user=self.reception_user,
+                title="Customer approval required",
+                work_order=self.work_order,
+            ).exists()
+        )
+
+        self.client.force_login(self.parts_user)
+        self.client.post(reverse("parts_request_action", args=(item.pk, "prepare")))
+        item.refresh_from_db()
+        self.assertEqual(item.status, "pending")
+
+        self.client.force_login(self.reception_user)
+        self.client.post(reverse("parts_request_action", args=(item.pk, "customer_approved")))
+        item.refresh_from_db()
+        self.assertEqual(item.approval_status, "pending")
+        self.assertEqual(item.customer_approval_recorded_by, self.reception_user)
+
+        self.client.post(reverse("parts_request_action", args=(item.pk, "approve")))
+        item.refresh_from_db()
+        self.assertEqual(item.approval_status, "approved")
+
+        self.client.force_login(self.parts_user)
+        self.client.post(reverse("parts_request_action", args=(item.pk, "prepare")))
+        item.refresh_from_db()
+        self.assertEqual(item.status, "preparing")
+
+    def test_warehouse_hold_notifies_the_requesting_mechanic(self):
+        item = PartsRequest.objects.create(
+            workshop=self.workshop,
+            work_order=self.work_order,
+            job=self.job,
+            part=self.part,
+            quantity_requested=Decimal("1"),
+            requested_by=self.mechanic,
+            status="pending",
+        )
+        self.client.force_login(self.parts_user)
+
+        self.client.post(reverse("parts_request_action", args=(item.pk, "hold")))
+
+        item.refresh_from_db()
+        self.assertEqual(item.status, "on_hold")
+        self.assertTrue(
+            Notification.objects.filter(
+                user=self.mechanic,
+                title="Part request on hold",
+                work_order=self.work_order,
+            ).exists()
+        )
 
     def test_mechanic_without_active_session_cannot_request_parts(self):
         self.participation.is_active = False
