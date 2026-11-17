@@ -1,6 +1,6 @@
 from django.contrib import admin
 
-from .models import JobCall, PauseReason
+from .models import JobCall, LaborArticle, PauseReason
 
 
 @admin.register(PauseReason)
@@ -15,3 +15,10 @@ class JobCallAdmin(admin.ModelAdmin):
     list_display = ("job", "mechanic", "called_by", "created_at", "accepted_at")
     list_filter = ("created_at", "accepted_at")
     search_fields = ("job__title", "mechanic__username")
+
+
+@admin.register(LaborArticle)
+class LaborArticleAdmin(admin.ModelAdmin):
+    list_display = ("code", "description", "standard_rate", "holiday_rate", "discounted_rate", "is_active")
+    list_filter = ("workshop", "is_active")
+    search_fields = ("code", "description")

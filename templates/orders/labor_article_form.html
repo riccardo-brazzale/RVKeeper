@@ -1,0 +1,8 @@
+{% extends "base.html" %}
+{% block title %}{% if article %}Modifica articolo{% else %}Nuovo articolo{% endif %} · RVKeeper{% endblock %}
+{% block content %}
+<div class="page-heading"><div><h2>{% if article %}Modifica articolo manodopera{% else %}Nuovo articolo manodopera{% endif %}</h2><p>Indica il codice, la descrizione e le tre tariffe orarie.</p></div><a class="button-link" href="{% url 'labor_articles' %}">Elenco articoli</a></div>
+<section class="panel"><form method="post">{% csrf_token %}{% if form.non_field_errors %}<div class="form-errors">{{ form.non_field_errors }}</div>{% endif %}<div class="form-grid">
+{% for field in form %}<div class="form-field"><label for="{{ field.id_for_label }}">{{ field.label }}</label>{{ field }}{% if field.help_text %}<small>{{ field.help_text }}</small>{% endif %}{% for error in field.errors %}<div class="form-errors">{{ error }}</div>{% endfor %}</div>{% endfor %}
+</div><button type="submit">Salva articolo</button></form></section>
+{% endblock %}

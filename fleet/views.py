@@ -9,6 +9,7 @@ from django.shortcuts import get_object_or_404, redirect, render
 from django.utils import timezone
 from django.utils.translation import gettext_lazy as _
 from io import BytesIO
+from decimal import Decimal
 from xml.sax.saxutils import escape
 
 from workshops.models import Membership
@@ -18,7 +19,7 @@ from .models import (Attachment, AuditLog, Camper, CamperPhoto, DocumentCategory
                      JobNote, JobParticipation, Notification, PartsRequest, TimeEvent, WarrantyClaim,
                      WarrantyReturn)
 from clientandsuppliers.models import CamperOwner
-from orders.models import Job, JobCall, PauseReason, WorkOrder, next_ro_number
+from orders.models import Job, JobCall, LaborArticle, PauseReason, WorkOrder, next_ro_number
 from parts.models import Part, PartDocument, PartMovement, PartSupplierOffer
 from quotes.models import Quote, QuoteLine
 from parts.views import part_detail, part_document_upload, part_movement, part_supplier_offer
@@ -371,6 +372,8 @@ def workflow_create(request, module):
             related_model = field.queryset.model
             if hasattr(related_model, "workshop"):
                 field.queryset = field.queryset.filter(workshop=workshop)
+                if related_model is LaborArticle:
+                    field.queryset = field.queryset.filter(is_active=True)
                 if _is_mechanic(request.user) and model is PartsRequest and related_model is WorkOrder:
                     field.queryset = field.queryset.filter(jobs__participations__mechanic=request.user, jobs__participations__is_active=True).distinct()
                 if _is_mechanic(request.user) and model is PartsRequest and related_model is Job:
@@ -461,6 +464,8 @@ def workflow_edit(request, module, pk):
             related_model = field.queryset.model
             if hasattr(related_model, "workshop"):
                 field.queryset = field.queryset.filter(workshop=workshop)
+                if related_model is LaborArticle:
+                    field.queryset = field.queryset.filter(is_active=True)
                 if _is_mechanic(request.user) and model is PartsRequest and related_model is WorkOrder:
                     field.queryset = field.queryset.filter(jobs__participations__mechanic=request.user, jobs__participations__is_active=True).distinct()
                 if _is_mechanic(request.user) and model is PartsRequest and related_model is Job:
@@ -712,6 +717,7 @@ def work_order_report(request, pk):
     doc = SimpleDocTemplate(buffer, pagesize=A4, rightMargin=18 * mm, leftMargin=18 * mm,
                             topMargin=17 * mm, bottomMargin=20 * mm,
                             title=f"Prospetto OdL {order.ro_number}", author="RVKeeper")
+    tariff_label = order.get_tariff_type_display()
     story = [
         Paragraph("PROSPETTO PER FATTURAZIONE", styles["Title"]),
         Paragraph("Documento riepilogativo non fiscale · non sostituisce fattura o ricevuta", styles["ReportSubtitle"]),
@@ -741,7 +747,8 @@ def work_order_report(request, pk):
     info = Table([
         [labelled("Officina", workshop.name), labelled("Ordine di lavoro", [f"N. {order.ro_number}", f"Aperto il {timezone.localtime(order.created_at).strftime('%d/%m/%Y')}"])],
         [labelled("Cliente", customer_lines), labelled("Veicolo", vehicle_details)],
-        [labelled("Chiuso il", timezone.localtime(order.completed_at).strftime("%d/%m/%Y %H:%M") if order.completed_at else "—"), labelled("Richiesta / diagnosi", order.reception_notes or "—")],
+        [labelled("Chiuso il", timezone.localtime(order.completed_at).strftime("%d/%m/%Y %H:%M") if order.completed_at else "—"), labelled("Tariffa manodopera", tariff_label)],
+        [labelled("Richiesta / diagnosi", order.reception_notes or "—"), labelled("", "")],
     ], colWidths=(86 * mm, 86 * mm), hAlign="LEFT")
     info.setStyle(TableStyle([
         ("BACKGROUND", (0, 0), (-1, -1), colors.HexColor("#F2F6FA")),
@@ -756,13 +763,19 @@ def work_order_report(request, pk):
     jobs = list(order.jobs.all())
     job_rows = [[paragraph("Intervento", "SmallCell"), paragraph("Stato", "SmallCell"), paragraph("Ore", "RightCell"), paragraph("Importo", "RightCell")]]
     total_minutes = 0
+    labor_total = Decimal("0.00")
     for job in jobs:
         minutes = _job_minutes(job)
         total_minutes += minutes
+        article = job.labor_article if job.labor_article_id and job.category == "customer_pay" else None
+        rate = article.rate_for(order.tariff_type) if article else None
+        amount = (Decimal(minutes) / Decimal(60) * rate).quantize(Decimal("0.01")) if rate is not None else None
+        if amount is not None:
+            labor_total += amount
         job_rows.append([labelled(job.title, job.description or "", "SmallCell"),
                          paragraph(job.get_status_display(), "SmallCell"),
                          paragraph(f"{minutes / 60:.2f}", "RightCell"),
-                         paragraph("Da definire", "RightCell")])
+                         paragraph(money(amount) if amount is not None else ("Non addebitato" if job.category != "customer_pay" else "Articolo da associare"), "RightCell")])
     if not jobs:
         job_rows.append([paragraph("Nessun lavoro registrato", "SmallCell"), paragraph("—", "SmallCell"), paragraph("0,00", "RightCell"), paragraph("—", "RightCell")])
     job_table = LongTable(job_rows, colWidths=(89 * mm, 27 * mm, 25 * mm, 31 * mm), repeatRows=1)
@@ -773,7 +786,7 @@ def work_order_report(request, pk):
         ("LEFTPADDING", (0, 0), (-1, -1), 6), ("RIGHTPADDING", (0, 0), (-1, -1), 6),
         ("TOPPADDING", (0, 0), (-1, -1), 5), ("BOTTOMPADDING", (0, 0), (-1, -1), 5),
     ]))
-    story.extend([job_table, Spacer(1, 3 * mm), paragraph(f"Tempo consuntivo totale: {total_minutes / 60:.2f} ore", "RightCell"), Spacer(1, 5 * mm), Paragraph("Ricambi utilizzati", styles["Heading2"])])
+    story.extend([job_table, Spacer(1, 3 * mm), paragraph(f"Tempo consuntivo totale: {total_minutes / 60:.2f} ore · Totale manodopera: {money(labor_total)}", "RightCell"), Spacer(1, 5 * mm), Paragraph("Ricambi utilizzati", styles["Heading2"])])
 
     requests = list(order.parts_requests.filter(status="delivered").select_related("part"))
     part_rows = [[paragraph("Articolo", "SmallCell"), paragraph("Quantità", "RightCell"), paragraph("Prezzo unitario", "RightCell"), paragraph("Importo", "RightCell")]]
@@ -798,10 +811,12 @@ def work_order_report(request, pk):
         ("LEFTPADDING", (0, 0), (-1, -1), 6), ("RIGHTPADDING", (0, 0), (-1, -1), 6),
         ("TOPPADDING", (0, 0), (-1, -1), 5), ("BOTTOMPADDING", (0, 0), (-1, -1), 5),
     ]))
-    total = Table([[paragraph("Totale parziale ricambi a listino", "RightCell"), paragraph(money(parts_total), "RightCell")]], colWidths=(141 * mm, 31 * mm), hAlign="RIGHT")
+    total = Table([[paragraph("Totale ricambi", "RightCell"), paragraph(money(parts_total), "RightCell")],
+                   [paragraph("Totale manodopera", "RightCell"), paragraph(money(labor_total), "RightCell")],
+                   [paragraph("Totale imponibile stimato", "RightCell"), paragraph(money(parts_total + labor_total), "RightCell")]], colWidths=(141 * mm, 31 * mm), hAlign="RIGHT")
     total.setStyle(TableStyle([("LINEABOVE", (0, 0), (-1, 0), .8, colors.HexColor("#12263D")), ("TOPPADDING", (0, 0), (-1, -1), 6)]))
     story.extend([part_table, Spacer(1, 2 * mm), total, Spacer(1, 8 * mm),
-                  paragraph("Manodopera indicata in ore consuntive; valorizzazione e imposte saranno determinate in fase di fatturazione.", "SmallCell")])
+                  paragraph("Importi calcolati con la tariffa selezionata in testata; documento riepilogativo non fiscale.", "SmallCell")])
     doc.build(story, onFirstPage=page_footer, onLaterPages=page_footer)
     pdf_data = buffer.getvalue()
 

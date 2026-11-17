@@ -109,6 +109,7 @@ class WorkOrderForm(forms.ModelForm):
             "model": _("Model"),
             "odometer": _("Odometer"),
             "work_classification": _("Work classification"),
+            "tariff_type": "Tariffa applicata",
             "warranty_status": _("Warranty status"),
             "reception_notes": _("Reception notes"),
             "checklist": _("Checklist"),
@@ -134,6 +135,7 @@ class WorkOrderForm(forms.ModelForm):
             help_text=_("The customer is automatically taken from the selected camper."),
             widget=CamperSelect(campers=campers),
         )
+        self.fields["tariff_type"].label = "Tariffa manodopera"
         for field_name in ("year", "make", "model", "odometer"):
             self.fields[field_name].widget.attrs["readonly"] = True
             self.fields[field_name].widget.attrs["data-camper-snapshot"] = field_name

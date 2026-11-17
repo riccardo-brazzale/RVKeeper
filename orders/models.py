@@ -35,6 +35,9 @@ class PauseReason(models.Model):
 
 
 class WorkOrder(models.Model):
+    TARIFF_CHOICES = [(v, label) for v, label in (
+        ("standard", "Standard"), ("holiday", "Festiva"), ("discounted", "Scontata"),
+    )]
     STATUS_CHOICES = [
         ("open", "Aperto"), ("in_progress", "In lavorazione"),
         ("ready_inspection", "In attesa di collaudo"), ("ready_pickup", "Pronto alla consegna"),
@@ -57,6 +60,7 @@ class WorkOrder(models.Model):
     customer_email = models.EmailField(blank=True)
     odometer = models.PositiveIntegerField(null=True, blank=True)
     work_classification = models.CharField(max_length=20, choices=CLASS_CHOICES, default="customer_pay")
+    tariff_type = models.CharField(max_length=20, choices=TARIFF_CHOICES, default="standard", verbose_name="Tipologia tariffa")
     warranty_status = models.CharField(max_length=30, choices=WARRANTY_CHOICES, default="not_applicable")
     status = models.CharField(max_length=30, choices=STATUS_CHOICES, default="open")
     completed_at = models.DateTimeField(null=True, blank=True, verbose_name="Data chiusura")
@@ -103,6 +107,7 @@ class Job(models.Model):
     work_order = models.ForeignKey("orders.WorkOrder", on_delete=models.CASCADE, related_name="jobs")
     job_number = models.PositiveIntegerField(default=1)
     title = models.CharField(max_length=200)
+    labor_article = models.ForeignKey("LaborArticle", on_delete=models.PROTECT, null=True, blank=True, related_name="jobs", verbose_name="Articolo manodopera")
     description = models.TextField(blank=True)
     category = models.CharField(max_length=20, choices=CATEGORY_CHOICES, default="customer_pay")
     department = models.CharField(max_length=20, choices=DEPARTMENT_CHOICES, default="technician")
@@ -125,6 +130,33 @@ class Job(models.Model):
 
     def __str__(self):
         return f"RO {self.work_order.ro_number} · {self.title}"
+
+
+class LaborArticle(models.Model):
+    """Articolo di manodopera con listino orario per tipologia di tariffa."""
+    workshop = models.ForeignKey("workshops.Workshop", on_delete=models.CASCADE, related_name="labor_articles")
+    code = models.CharField(max_length=40)
+    description = models.CharField(max_length=200)
+    standard_rate = models.DecimalField(max_digits=9, decimal_places=2, default=65, verbose_name="Tariffa oraria standard")
+    holiday_rate = models.DecimalField(max_digits=9, decimal_places=2, default=95, verbose_name="Tariffa oraria festiva")
+    discounted_rate = models.DecimalField(max_digits=9, decimal_places=2, default=50, verbose_name="Tariffa oraria scontata")
+    is_active = models.BooleanField(default=True, verbose_name="Attivo")
+
+    class Meta:
+        ordering = ("code",)
+        constraints = [models.UniqueConstraint(fields=("workshop", "code"), name="unique_labor_article_per_workshop")]
+        verbose_name = "Articolo manodopera"
+        verbose_name_plural = "Articoli manodopera"
+
+    def __str__(self):
+        return f"{self.code} · {self.description}"
+
+    def rate_for(self, tariff_type):
+        return {
+            "standard": self.standard_rate,
+            "holiday": self.holiday_rate,
+            "discounted": self.discounted_rate,
+        }[tariff_type]
 
 
 class JobCall(models.Model):
