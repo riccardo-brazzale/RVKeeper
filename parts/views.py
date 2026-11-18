@@ -46,7 +46,10 @@ def inventory(request):
     workshop = _workshop_or_redirect(request)
     if workshop is None:
         return redirect("home")
+    is_mechanic = _is_mechanic(request.user)
     parts = Part.objects.filter(workshop=workshop)
+    if is_mechanic:
+        parts = parts.defer("sale_price")
     query = request.GET.get("q", "").strip()
     if query:
         parts = parts.filter(models.Q(part_number__icontains=query) | models.Q(name__icontains=query) |
@@ -58,7 +61,7 @@ def inventory(request):
             defaults={"body": f"{part.part_number} · {part.name}: disponibili {part.quantity}, minimo {part.min_stock}"},
         )
     return render(request, "parts/part_list.html", {
-        "parts": parts, "query": query, "low_stock_count": low_stock.count(), "is_mechanic": _is_mechanic(request.user),
+        "parts": parts, "query": query, "low_stock_count": low_stock.count(), "is_mechanic": is_mechanic,
     })
 
 
@@ -102,8 +105,9 @@ def part_detail(request, pk):
     workshop = _workshop_or_redirect(request)
     if workshop is None:
         return redirect("home")
-    part = get_object_or_404(Part, pk=pk, workshop=workshop)
     is_mechanic = _is_mechanic(request.user)
+    queryset = Part.objects.defer("sale_price") if is_mechanic else Part.objects.all()
+    part = get_object_or_404(queryset, pk=pk, workshop=workshop)
     return render(request, "parts/part_detail.html", {
         "part": part,
         "offers": [] if is_mechanic else part.supplier_offers.select_related("supplier"),

@@ -396,12 +396,17 @@ def workflow_list(request, module):
         return redirect("home")
     model, title, columns = _module(module)
     if module == "requests" and _is_mechanic(request.user):
-        columns = tuple(column for column in columns if column != "supplier_offer")
+        columns = tuple(
+            column for column in columns
+            if column not in ("supplier_offer", "customer_quoted_price")
+        )
     if module == "orders" and _is_mechanic(request.user):
         columns = tuple(column for column in columns if column != "invoiced")
     objects = model.objects.filter(workshop=workshop).select_related(*[f for f in columns if f in {x.name for x in model._meta.fields} and model._meta.get_field(f).is_relation])
     if model is PartsRequest:
         objects = objects.select_related("work_order", "part", "supplier_offer__supplier")
+        if _is_mechanic(request.user):
+            objects = objects.defer("customer_quoted_price", "part__sale_price")
     if model is WarrantyClaim or model is WarrantyReturn:
         objects = objects.select_related("work_order")
     if model is Job:
@@ -451,7 +456,7 @@ def workflow_list(request, module):
     if module == "requests" and _is_mechanic(request.user):
         column_headers = (
             _("Work order"), _("Part"), _("Custom item"), _("Requested quantity"),
-            _("Warehouse status"), _("Approval"), _("Customer quote"), _("Repair minutes"),
+            _("Warehouse status"), _("Approval"), _("Repair minutes"),
         )
     if module == "orders" and _is_mechanic(request.user):
         column_headers = (_("Work order number"), _("Camper"), _("Customer"), _("Phone"), _("Status"), _("Closed at"))
