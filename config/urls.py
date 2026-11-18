@@ -10,9 +10,9 @@ from fleet import views as fleet_views
 from accounts import views as accounts_views
 from config import admin_ordering  # noqa: F401
 
-admin.site.site_header = "Amministrazione RVKeeper"
-admin.site.site_title = "Amministrazione RVKeeper"
-admin.site.index_title = "Amministrazione RVKeeper"
+admin.site.site_header = "RVKeeper Administration"
+admin.site.site_title = "RVKeeper Administration"
+admin.site.index_title = "Administration"
 
 
 urlpatterns = [

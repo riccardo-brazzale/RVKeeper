@@ -39,6 +39,20 @@ class PreferredLanguageMiddlewareTests(SimpleTestCase):
         self.assertEqual(response_language, "en-us")
         self.assertFalse(hasattr(self.request, "LANGUAGE_CODE"))
 
+    def test_browser_preference_leaves_locale_middleware_language_unchanged(self):
+        self.request.user = SimpleNamespace(
+            is_authenticated=True,
+            preferred_language="",
+        )
+        self.request.LANGUAGE_CODE = "it"
+        get_response = Mock(side_effect=lambda request: translation.get_language())
+
+        with translation.override("it"):
+            response_language = PreferredLanguageMiddleware(get_response)(self.request)
+
+        self.assertEqual(response_language, "it")
+        self.assertEqual(self.request.LANGUAGE_CODE, "it")
+
     def test_anonymous_request_does_not_override_active_language(self):
         self.request.user = SimpleNamespace(is_authenticated=False)
         get_response = Mock(side_effect=lambda request: translation.get_language())
@@ -77,4 +91,14 @@ class LanguagePreferenceViewTests(TestCase):
 
         self.assertEqual(response.status_code, 200)
         self.user.refresh_from_db()
-        self.assertEqual(self.user.preferred_language, "en-us")
+        self.assertEqual(self.user.preferred_language, "")
+
+    def test_user_can_select_browser_language(self):
+        response = self.client.post(
+            "/accounts/preferences/",
+            {"preferred_language": ""},
+        )
+
+        self.assertRedirects(response, "/accounts/preferences/")
+        self.user.refresh_from_db()
+        self.assertEqual(self.user.preferred_language, "")

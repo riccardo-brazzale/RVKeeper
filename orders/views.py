@@ -66,7 +66,7 @@ def labor_article_list(request):
 
 @login_required
 def labor_article_form(request, pk=None):
-    if getattr(request.user, "department", "") == "technician":
+    if getattr(request.user, "profile", "") != "admin" and not request.user.is_superuser:
         from django.http import HttpResponseForbidden
         return HttpResponseForbidden("Solo il personale d'ufficio può gestire il listino.")
     workshop = _catalog_context(request)

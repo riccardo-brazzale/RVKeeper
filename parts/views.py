@@ -27,7 +27,7 @@ def _workshop_or_redirect(request):
 
 
 def _is_mechanic(user):
-    return getattr(user, "department", "") == "technician"
+    return getattr(user, "profile", "") == "mechanic"
 
 
 def _deny_mechanic(request):

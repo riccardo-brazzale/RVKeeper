@@ -11,7 +11,7 @@ class PreferredLanguageMiddleware:
         if user is not None and user.is_authenticated:
             supported_languages = {code for code, _ in settings.LANGUAGES}
             language = user.preferred_language
-            if language in supported_languages:
+            if language and language in supported_languages:
                 translation.activate(language)
                 request.LANGUAGE_CODE = language
         return self.get_response(request)

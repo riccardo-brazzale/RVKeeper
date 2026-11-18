@@ -1,6 +1,7 @@
 
 from django.db import models
 from django.contrib.auth.models import AbstractUser, BaseUserManager
+from django.utils.translation import gettext_lazy as _
 
 
 class UserManager(BaseUserManager):
@@ -8,12 +9,12 @@ class UserManager(BaseUserManager):
 
     def create_user(self, username, email, password=None, **extra_fields):
         if not username:
-            raise ValueError("Il nome utente è obbligatorio")
+            raise ValueError("Username is required.")
         username = username.strip()
         if not username:
-            raise ValueError("Il nome utente è obbligatorio")
+            raise ValueError("Username is required.")
         if not email:
-            raise ValueError("L'indirizzo email è obbligatorio")
+            raise ValueError("Email address is required.")
 
         email = self.normalize_email(email).lower()
 
@@ -32,52 +33,72 @@ class UserManager(BaseUserManager):
         extra_fields.setdefault("is_staff", True)
         extra_fields.setdefault("is_superuser", True)
         extra_fields.setdefault("is_active", True)
+        extra_fields.setdefault("profile", "admin")
 
         if extra_fields.get("is_staff") is not True:
-            raise ValueError("Il superuser deve avere is_staff=True")
+            raise ValueError("A superuser must have is_staff=True.")
 
         if extra_fields.get("is_superuser") is not True:
-            raise ValueError("Il superuser deve avere is_superuser=True")
+            raise ValueError("A superuser must have is_superuser=True.")
 
         return self.create_user(username, email, password, **extra_fields)
 
 
 class User(AbstractUser):
-    """Utente principale di RVKeeper."""
+    """Primary RVKeeper user account."""
 
     username = models.CharField(
         max_length=150,
         unique=True,
-        verbose_name="Nome utente",
+        verbose_name=_("Username"),
     )
 
     LANGUAGE_CHOICES = [
-        ("en-us", "English"),
-        ("it", "Italiano"),
-        ("es", "Español"),
+        ("", _("Use browser language")),
+        ("en-us", _("English")),
+        ("it", _("Italian")),
+        ("es", _("Spanish")),
     ]
-    DEPARTMENT_CHOICES = [(v, v.title()) for v in ("reception", "technician", "details", "parts", "warranty", "admin")]
-    SPECIALTY_CHOICES = [(v, v.title()) for v in ("interior", "engine", "body", "general", "detailing")]
-    SENIORITY_CHOICES = [("technician", "Meccanico"), ("senior", "Meccanico senior"), ("manager", "Responsabile")]
+    PROFILE_CHOICES = [
+        ("admin", _("Administrator")),
+        ("warehouse", _("Warehouse operator")),
+        ("mechanic", _("Mechanic")),
+    ]
 
     email = models.EmailField(
-        verbose_name="Email"
+        verbose_name=_("Email address")
     )
 
     preferred_language = models.CharField(
         max_length=10,
         choices=LANGUAGE_CHOICES,
-        default="en-us",
-        verbose_name="Lingua preferita"
+        default="",
+        verbose_name=_("Preferred language"),
     )
 
-    department = models.CharField(max_length=20, choices=DEPARTMENT_CHOICES, default="reception", verbose_name="Reparto")
-    specialty = models.CharField(max_length=20, choices=SPECIALTY_CHOICES, blank=True, verbose_name="Specialità")
-    seniority = models.CharField(max_length=20, choices=SENIORITY_CHOICES, default="technician", verbose_name="Livello operativo")
+    profile = models.CharField(max_length=20, choices=PROFILE_CHOICES, default="mechanic", verbose_name=_("Profile"))
+
+    @property
+    def is_mechanic(self):
+        return self.profile == "mechanic"
+
+    @property
+    def is_warehouse(self):
+        return self.profile == "warehouse"
+
+    @property
+    def is_administrator(self):
+        return self.profile == "admin" or self.is_superuser
+
+    def has_perm(self, perm, obj=None):
+        return self.is_administrator or super().has_perm(perm, obj)
+
+    def has_module_perms(self, app_label):
+        return self.is_administrator or super().has_module_perms(app_label)
 
     class Meta:
-        verbose_name = "Utente"
-        verbose_name_plural = "Utenti"
+        verbose_name = _("User")
+        verbose_name_plural = _("Users")
 
     USERNAME_FIELD = "username"
     REQUIRED_FIELDS = ["email"]

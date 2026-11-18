@@ -4,7 +4,7 @@ from django.core.management import BaseCommand, CommandError, call_command
 from django.db import transaction
 
 from accounts.models import User
-from workshops.models import Membership, Role, Workshop
+from workshops.models import Membership, Workshop
 
 
 class Command(BaseCommand):
@@ -38,23 +38,14 @@ class Command(BaseCommand):
                     f"L'officina {slug!r} esiste ma non è attiva o non ha country=US; non è stata modificata."
                 )
 
-            role, _ = Role.objects.get_or_create(
-                workshop=workshop,
-                code="admin",
-                defaults={
-                    "name": "Amministratore",
-                    "description": "Ruolo iniziale dell'installazione RVKeeper.",
-                    "is_system": True,
-                },
-            )
             membership, created = Membership.objects.get_or_create(
                 user=admin,
                 workshop=workshop,
-                defaults={"role": role, "is_active": True},
+                defaults={"is_active": True},
             )
-            if not created and (membership.role_id != role.pk or not membership.is_active):
+            if not created and not membership.is_active:
                 raise CommandError(
-                    "Il superuser principale ha già un'appartenenza incompatibile con l'officina demo; "
+                    "Il superuser principale ha già un'appartenenza disattivata per l'officina demo; "
                     "verificarla nell'admin prima di continuare."
                 )
 

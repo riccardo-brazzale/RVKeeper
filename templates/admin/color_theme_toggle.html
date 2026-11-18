@@ -18,8 +18,9 @@
   <input type="hidden" name="next" value="{{ request.get_full_path }}">
   <label class="visually-hidden" for="admin-language">{% translate 'Language' %}</label>
   <select id="admin-language" name="preferred_language" aria-label="{% translate 'Language' %}" onchange="this.form.submit()">
-    <option value="it" aria-label="Italiano" title="Italiano" {% if user.preferred_language == 'it' %}selected{% endif %}>🇮🇹</option>
+    <option value="" aria-label="{% translate 'Use browser language' %}" title="{% translate 'Use browser language' %}" {% if not user.preferred_language %}selected{% endif %}>🌐</option>
+    <option value="it" aria-label="{% translate 'Italian' %}" title="{% translate 'Italian' %}" {% if user.preferred_language == 'it' %}selected{% endif %}>🇮🇹</option>
     <option value="en-us" aria-label="English" title="English" {% if user.preferred_language == 'en-us' %}selected{% endif %}>🇬🇧</option>
-    <option value="es" aria-label="Español" title="Español" {% if user.preferred_language == 'es' %}selected{% endif %}>🇪🇸</option>
+    <option value="es" aria-label="{% translate 'Spanish' %}" title="{% translate 'Spanish' %}" {% if user.preferred_language == 'es' %}selected{% endif %}>🇪🇸</option>
   </select>
 </form>

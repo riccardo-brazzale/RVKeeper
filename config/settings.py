@@ -39,7 +39,7 @@ INSTALLED_APPS = [
     'django.contrib.messages',
     'django.contrib.staticfiles',
     
-      # Applicazioni RVKeeper
+      # RVKeeper applications
     
     'accounts',
     'workshops',
@@ -130,8 +130,8 @@ TIME_ZONE = 'UTC'
 
 LANGUAGES = [
     ('en-us', _('English')),
-    ('it', _('Italiano')),
-    ('es', _('Español')),
+    ('it', _('Italian')),
+    ('es', _('Spanish')),
 ]
 
 USE_I18N = True

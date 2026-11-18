@@ -21,7 +21,7 @@ def _workshop(user):
 
 
 def _denied(user):
-    return getattr(user, "department", "") == "technician"
+    return getattr(user, "profile", "") != "admin" and not user.is_superuser
 
 
 def _quote_number(workshop):

@@ -11,7 +11,7 @@ from django.utils import timezone
 from clientandsuppliers.models import CamperOwner
 from orders.models import Job, PauseReason, WorkOrder
 from parts.models import Part, PartMovement
-from workshops.models import Membership, Role, Workshop
+from workshops.models import Membership, Workshop
 
 from .forms import CamperForm, WorkOrderForm
 from .models import Camper, JobPartUsage, JobParticipation, Notification, PartsRequest, TimeEvent
@@ -163,19 +163,18 @@ class WorkOrderFormTests(TestCase):
 class TimeReportTests(TestCase):
     def setUp(self):
         self.workshop = Workshop.objects.create(name="Report workshop", slug="report-workshop")
-        role = Role.objects.create(workshop=self.workshop, name="Report staff", code="report-staff")
         user_model = get_user_model()
         self.office_user = user_model.objects.create_user(
-            "report-office", "report-office@example.test", "password", department="reception"
+            "report-office", "report-office@example.test", "password", profile="admin"
         )
         self.technician = user_model.objects.create_user(
-            "report-tech", "report-tech@example.test", "password", department="technician"
+            "report-tech", "report-tech@example.test", "password", profile="mechanic"
         )
         self.other_technician = user_model.objects.create_user(
-            "report-tech-2", "report-tech-2@example.test", "password", department="technician"
+            "report-tech-2", "report-tech-2@example.test", "password", profile="mechanic"
         )
         for user in (self.office_user, self.technician, self.other_technician):
-            Membership.objects.create(user=user, workshop=self.workshop, role=role)
+            Membership.objects.create(user=user, workshop=self.workshop)
         self.work_order = WorkOrder.objects.create(
             workshop=self.workshop,
             ro_number="RO-REPORT-001",
@@ -251,22 +250,21 @@ class TimeReportTests(TestCase):
 class JobPartsWorkflowTests(TestCase):
     def setUp(self):
         self.workshop = Workshop.objects.create(name="Parts workshop", slug="parts-workshop")
-        role = Role.objects.create(workshop=self.workshop, name="Workshop staff", code="workshop-staff")
         user_model = get_user_model()
         self.mechanic = user_model.objects.create_user(
-            "mechanic", "mechanic@example.test", "password", department="technician"
+            "mechanic", "mechanic@example.test", "password", profile="mechanic"
         )
         self.parts_user = user_model.objects.create_user(
-            "warehouse", "warehouse@example.test", "password", department="parts"
+            "warehouse", "warehouse@example.test", "password", profile="warehouse"
         )
         self.reception_user = user_model.objects.create_user(
-            "reception", "reception@example.test", "password", department="reception"
+            "reception", "reception@example.test", "password", profile="admin"
         )
-        Membership.objects.create(user=self.mechanic, workshop=self.workshop, role=role)
+        Membership.objects.create(user=self.mechanic, workshop=self.workshop)
         self.parts_membership = Membership.objects.create(
-            user=self.parts_user, workshop=self.workshop, role=role
+            user=self.parts_user, workshop=self.workshop
         )
-        Membership.objects.create(user=self.reception_user, workshop=self.workshop, role=role)
+        Membership.objects.create(user=self.reception_user, workshop=self.workshop)
         self.customer = CamperOwner.objects.create(
             workshop=self.workshop, kind="customer", first_name="Ada", last_name="Lovelace"
         )
@@ -443,10 +441,10 @@ class JobPartsWorkflowTests(TestCase):
 
     def test_orders_menu_lists_work_orders_before_quotes(self):
         office_user = get_user_model().objects.create_user(
-            "orders-office", "orders-office@example.test", "password", department="reception"
+            "orders-office", "orders-office@example.test", "password", profile="admin"
         )
         Membership.objects.create(
-            user=office_user, workshop=self.workshop, role=self.mechanic.memberships.get().role
+            user=office_user, workshop=self.workshop
         )
         self.client.force_login(office_user)
 
@@ -593,10 +591,10 @@ class JobPartsWorkflowTests(TestCase):
     def test_work_order_pdf_renders_stock_usage(self):
         user_model = get_user_model()
         office_user = user_model.objects.create_user(
-            "office", "office@example.test", "password", department="reception"
+            "office", "office@example.test", "password", profile="admin"
         )
         Membership.objects.create(
-            user=office_user, workshop=self.workshop, role=self.mechanic.memberships.get().role
+            user=office_user, workshop=self.workshop
         )
         self.work_order.status = "completed"
         self.work_order.completed_at = timezone.now()

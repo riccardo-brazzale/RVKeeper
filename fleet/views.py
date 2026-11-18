@@ -15,7 +15,7 @@ from datetime import datetime, time, timedelta
 from xml.sax.saxutils import escape
 
 from workshops.models import Membership
-from workshops.models import Role, Workshop
+from workshops.models import Workshop
 from .forms import (
     CamperForm, CamperPhotoForm, PartsRequestFormSet, PartsUsageFormSet, TimeReportFilterForm, WorkOrderForm,
 )
@@ -41,26 +41,28 @@ def _active_workshop(user):
 
 
 def _is_mechanic(user):
-    return getattr(user, "department", "") == "technician"
+    return getattr(user, "profile", "") == "mechanic"
 
 
 def _forbidden_for_mechanic(request):
     if _is_mechanic(request.user):
         return HttpResponseForbidden(_("Your profile can only access work orders and parts."))
+    if getattr(request.user, "profile", "") == "warehouse" and not request.path.startswith(("/magazzino/", "/richieste-ricambi/")):
+        return HttpResponseForbidden(_("Your profile can only manage warehouse inventory and parts requests."))
     return None
 
 
 def _can_manage_parts(user):
-    return user.is_superuser or user.department in ("parts", "admin")
+    return user.is_administrator or user.is_warehouse
 
 
 def _can_approve_parts(user):
-    return user.is_superuser or user.department in ("reception", "admin")
+    return user.is_administrator
 
 
-def _notify_department(workshop, department, title, body, link, work_order):
+def _notify_profile(workshop, profile, title, body, link, work_order):
     recipients = list(get_user_model().objects.filter(
-        department=department,
+        profile=profile,
         is_active=True,
         memberships__workshop=workshop,
         memberships__is_active=True,
@@ -120,9 +122,9 @@ def _set_initial_parts_request_status(item):
 def _notify_new_parts_requests(requests):
     customer_approval_requests = [item for item in requests if item.approval_status == "awaiting_customer"]
     warehouse_requests = [item for item in requests if item.approval_status == "not_required"]
-    for items, department, title in (
-        (customer_approval_requests, "reception", _("Customer approval required")),
-        (warehouse_requests, "parts", _("Parts requested from a job")),
+    for items, profile, title in (
+        (customer_approval_requests, "admin", _("Customer approval required")),
+        (warehouse_requests, "warehouse", _("Parts requested from a job")),
     ):
         if not items:
             continue
@@ -132,9 +134,9 @@ def _notify_new_parts_requests(requests):
             f"{item.part} ({item.customer_quoted_price} {item.workshop.currency})"
             for item in items
         )
-        _notify_department(
+        _notify_profile(
             first.workshop,
-            department,
+            profile,
             title,
             f"{first.work_order.ro_number}{job_label} · {details}",
             "/richieste-ricambi/",
@@ -346,6 +348,8 @@ def _job_minutes(job):
 
 @login_required
 def dashboard(request):
+    if request.user.profile == "warehouse":
+        return redirect("inventory")
     workshop = _workshop_or_redirect(request)
     if workshop is None:
         return render(request, "fleet/dashboard.html", {"has_workshop": False})
@@ -383,6 +387,8 @@ def workflow_list(request, module):
         return redirect("customers")
     if module == "parts":
         return redirect("inventory")
+    if request.user.profile == "warehouse" and module != "requests":
+        return HttpResponseForbidden(_("Your profile can only manage warehouse inventory and parts requests."))
     if module not in ("orders", "jobs", "parts", "requests") and _forbidden_for_mechanic(request):
         return _forbidden_for_mechanic(request)
     workshop = _workshop_or_redirect(request)
@@ -455,7 +461,7 @@ def workflow_list(request, module):
     context["can_approve_parts"] = _can_approve_parts(request.user)
     if module == "jobs":
         context["mechanics"] = request.user.__class__.objects.filter(memberships__workshop=workshop,
-            memberships__is_active=True, department="technician", is_active=True).distinct().order_by(
+            memberships__is_active=True, profile="mechanic", is_active=True).distinct().order_by(
                 "last_name", "first_name", "username"
             )
         context["pause_reasons"] = PauseReason.objects.filter(is_active=True)
@@ -468,6 +474,8 @@ def workflow_list(request, module):
 
 @login_required
 def workflow_create(request, module):
+    if request.user.profile == "warehouse" and module != "requests":
+        return HttpResponseForbidden(_("Your profile can only manage warehouse inventory and parts requests."))
     if _is_mechanic(request.user) and module in ("orders", "jobs", "parts"):
         return HttpResponseForbidden(_("You can record inventory movements; the parts catalog is managed by a supervisor."))
     if module not in ("orders", "jobs", "parts", "requests") and _forbidden_for_mechanic(request):
@@ -579,6 +587,8 @@ def workflow_create(request, module):
 
 @login_required
 def workflow_edit(request, module, pk):
+    if request.user.profile == "warehouse" and module != "requests":
+        return HttpResponseForbidden(_("Your profile can only manage warehouse inventory and parts requests."))
     if _is_mechanic(request.user) and module in ("orders", "jobs", "requests", "parts"):
         return HttpResponseForbidden(_("Only a supervisor can edit the catalog; record an inventory movement to update stock."))
     if module not in ("orders", "jobs", "parts", "requests") and _forbidden_for_mechanic(request):
@@ -669,9 +679,9 @@ def workflow_edit(request, module, pk):
                     f"{obj.work_order.ro_number} · {obj.part or obj.custom_item} · "
                     f"{obj.customer_quoted_price} {workshop.currency} · {obj.repair_minutes} min"
                 )
-                _notify_department(
+                _notify_profile(
                     workshop,
-                    "reception",
+                    "admin",
                     _("Customer approval required"),
                     body,
                     "/richieste-ricambi/",
@@ -689,17 +699,19 @@ def workflow_edit(request, module, pk):
 
 @login_required
 def job_action(request, pk, action):
+    if request.user.profile == "warehouse":
+        return HttpResponseForbidden(_("Warehouse profiles cannot manage repair sessions."))
     workshop = _workshop_or_redirect(request)
     if workshop is None: return redirect("home")
     if request.method != "POST": return redirect("jobs")
     job = get_object_or_404(Job.objects.select_related("work_order"), pk=pk, workshop=workshop)
     now = timezone.now()
-    is_supervisor = request.user.is_staff or request.user.is_superuser or request.user.department == "admin" or request.user.seniority in ("senior", "manager")
+    is_supervisor = request.user.is_administrator
     participation = JobParticipation.objects.filter(job=job, mechanic=request.user, is_active=True).first()
 
     if action == "call":
-        if _is_mechanic(request.user): return HttpResponseForbidden(_("Only a supervisor can call a technician."))
-        mechanic = get_object_or_404(request.user.__class__, pk=request.POST.get("mechanic"), department="technician", is_active=True, memberships__workshop=workshop, memberships__is_active=True)
+        if request.user.profile != "admin" and not request.user.is_superuser: return HttpResponseForbidden(_("Only an administrator can call a technician."))
+        mechanic = get_object_or_404(request.user.__class__, pk=request.POST.get("mechanic"), profile="mechanic", is_active=True, memberships__workshop=workshop, memberships__is_active=True)
         call, created = JobCall.objects.get_or_create(workshop=workshop, job=job, mechanic=mechanic, accepted_at__isnull=True, dismissed_at__isnull=True,
             defaults={"called_by": request.user})
         if created:
@@ -781,6 +793,8 @@ def job_action(request, pk, action):
 
 @login_required
 def my_jobs(request):
+    if request.user.profile == "warehouse":
+        return HttpResponseForbidden(_("Warehouse profiles cannot access repair sessions."))
     workshop = _workshop_or_redirect(request)
     if workshop is None: return redirect("home")
     return _render_my_jobs(request, workshop)
@@ -1090,9 +1104,9 @@ def parts_request_action(request, pk, action):
                 "customer_approval_recorded_by", "updated_at",
             ))
             _audit(workshop, request.user, "customer_approved", PartsRequest, item)
-            _notify_department(
+            _notify_profile(
                 workshop,
-                "reception",
+                "admin",
                 _("Customer approval recorded"),
                 f"{item.work_order.ro_number} · {item.part or item.custom_item}",
                 "/richieste-ricambi/",
@@ -1123,9 +1137,9 @@ def parts_request_action(request, pk, action):
                 "approval_decided_by", "updated_at",
             ))
             _audit(workshop, request.user, "approve", PartsRequest, item)
-            _notify_department(
+            _notify_profile(
                 workshop,
-                "parts",
+                "warehouse",
                 _("Approved request ready for warehouse"),
                 f"{item.work_order.ro_number} · {item.part or item.custom_item}",
                 "/richieste-ricambi/",
@@ -1160,6 +1174,8 @@ def parts_request_action(request, pk, action):
 
 @login_required
 def workflow_status_action(request, module, pk):
+    if request.user.profile == "warehouse":
+        return HttpResponseForbidden(_("Warehouse profiles cannot update work order statuses."))
     if module not in ("orders", "requests") and _forbidden_for_mechanic(request):
         return _forbidden_for_mechanic(request)
     workshop = _workshop_or_redirect(request)
@@ -1199,7 +1215,7 @@ def workflow_status_action(request, module, pk):
 
 @login_required
 def work_order_report(request, pk):
-    if _is_mechanic(request.user):
+    if request.user.profile != "admin" and not request.user.is_superuser:
         return HttpResponseForbidden(_("The billing report is restricted to office staff."))
     if request.method not in ("GET", "POST"):
         return HttpResponseNotAllowed(["GET", "POST"])
@@ -1388,6 +1404,8 @@ def mark_notifications_read(request):
 
 @login_required
 def report(request):
+    if request.user.profile != "admin" and not request.user.is_superuser:
+        return HttpResponseForbidden(_("Reports are available to administrators."))
     workshop = _workshop_or_redirect(request)
     if workshop is None:
         return redirect("home")
@@ -1495,6 +1513,8 @@ def notifications_feed(request):
 
 @login_required
 def audit_log(request):
+    if request.user.profile != "admin" and not request.user.is_superuser:
+        return HttpResponseForbidden(_("The activity log is available to administrators."))
     workshop = _workshop_or_redirect(request)
     if workshop is None: return redirect("home")
     return render(request, "fleet/audit_log.html", {"items": AuditLog.objects.filter(workshop=workshop).select_related("actor", "work_order")[:300]})
@@ -1502,9 +1522,11 @@ def audit_log(request):
 
 @login_required
 def data_export(request):
+    if request.user.profile != "admin" and not request.user.is_superuser:
+        return HttpResponseForbidden(_("Data export is available to administrators."))
     workshop = _workshop_or_redirect(request)
     if workshop is None: return redirect("home")
-    models_to_export = (Workshop, Role, Membership, CamperOwner, Camper, CamperPhoto, WorkOrder, Job, Quote, QuoteLine, Part, PartMovement,
+    models_to_export = (Workshop, Membership, CamperOwner, Camper, CamperPhoto, WorkOrder, Job, Quote, QuoteLine, Part, PartMovement,
                         PartSupplierOffer, PartDocument,
                         PartsRequest, JobPartUsage, WarrantyClaim, WarrantyReturn, JobNote,
                         Attachment, Notification, TimeEvent, JobAssignment, AuditLog)

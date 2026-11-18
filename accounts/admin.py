@@ -2,6 +2,7 @@
 from django.contrib import admin
 from django.contrib.auth.admin import UserAdmin
 from django.contrib.auth.models import Group
+from django.utils.translation import gettext_lazy as _
 
 from .models import User
 from .forms import CustomUserCreationForm, CustomUserChangeForm
@@ -13,8 +14,10 @@ admin.site.unregister(Group)
 
 class MembershipInline(admin.TabularInline):
     model = Membership
+    verbose_name = _("Workshop membership")
+    verbose_name_plural = _("Workshop memberships")
     extra = 0
-    fields = ("workshop", "role", "is_active")
+    fields = ("workshop", "is_active")
 
 
 @admin.register(User)
@@ -26,6 +29,11 @@ class CustomUserAdmin(UserAdmin):
     add_form = CustomUserCreationForm
     inlines = (MembershipInline,)
 
+    def save_model(self, request, obj, form, change):
+        # The profile determines access to the administration site.
+        obj.is_staff = obj.profile == "admin" or obj.is_superuser
+        super().save_model(request, obj, form, change)
+
     ordering = ("username",)
     list_display = (
         "username",
@@ -33,16 +41,14 @@ class CustomUserAdmin(UserAdmin):
         "first_name",
         "last_name",
         "preferred_language",
-        "seniority",
+        "profile",
         "is_active",
-        "is_staff",
     )
 
     list_filter = (
         "is_active",
-        "is_staff",
         "preferred_language",
-        "seniority",
+        "profile",
     )
 
     search_fields = (
@@ -56,24 +62,21 @@ class CustomUserAdmin(UserAdmin):
         (None, {
             "fields": ("username", "email", "password")
         }),
-        ("Informazioni personali", {
+        (_("Personal details and profile"), {
             "fields": (
                 "first_name",
                 "last_name",
                 "preferred_language",
-                "department",
-                "specialty",
-                "seniority",
+                "profile",
             )
         }),
-        ("Permissions", {
+        (_("Access"), {
             "fields": (
                 "is_active",
-                "is_staff",
                 "is_superuser",
             )
         }),
-        ("Important Dates", {
+        (_("Dates"), {
             "fields": (
                 "last_login",
                 "date_joined",
@@ -88,13 +91,10 @@ class CustomUserAdmin(UserAdmin):
                 "username",
                 "email",
                 "preferred_language",
-                "department",
-                "specialty",
-                "seniority",
+                "profile",
                 "password1",
                 "password2",
                 "is_active",
-                "is_staff",
                 "is_superuser",
             ),
         }),

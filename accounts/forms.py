@@ -11,9 +11,7 @@ class CustomUserCreationForm(UserCreationForm):
             "username",
             "email",
             "preferred_language",
-            "department",
-            "specialty",
-            "seniority",
+            "profile",
         )
 
 

@@ -17,7 +17,7 @@ def _active_workshop(user):
 
 
 def _can_manage_contacts(user):
-    return getattr(user, "department", "") != "technician"
+    return getattr(user, "profile", "") == "admin" or user.is_superuser
 
 
 @login_required

@@ -43,7 +43,7 @@ class TimeReportFilterForm(forms.Form):
         super().__init__(*args, **kwargs)
         user_model = get_user_model()
         self.fields["technician"].queryset = (
-            user_model.objects.filter(department="technician")
+            user_model.objects.filter(profile="mechanic")
             .filter(
                 Q(memberships__workshop=workshop, memberships__is_active=True)
                 | Q(time_events__workshop=workshop)

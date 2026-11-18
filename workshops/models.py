@@ -1,13 +1,13 @@
 
 from django.conf import settings
-from django.core.exceptions import ValidationError
 from django.db import models
+from django.utils.translation import gettext_lazy as _
 
 
 class Workshop(models.Model):
     name = models.CharField(
         max_length=150,
-        verbose_name="Nome officina"
+        verbose_name=_("Workshop name")
     )
 
     slug = models.SlugField(
@@ -24,7 +24,7 @@ class Workshop(models.Model):
         max_length=10,
         choices=[
             ("en-us", "English"),
-            ("it", "Italiano"),
+            ("it", _("Italian")),
         ],
         default="en-us"
     )
@@ -45,50 +45,11 @@ class Workshop(models.Model):
 
     class Meta:
         ordering = ["name"]
-        verbose_name = "Officina"
-        verbose_name_plural = "Officine"
+        verbose_name = _("Workshop")
+        verbose_name_plural = _("Workshops")
 
     def __str__(self):
         return self.name
-
-
-class Role(models.Model):
-    workshop = models.ForeignKey(
-        Workshop,
-        on_delete=models.CASCADE,
-        related_name="roles"
-    )
-
-    name = models.CharField(max_length=100)
-
-    code = models.SlugField(max_length=50)
-
-    description = models.TextField(blank=True)
-
-    permissions = models.ManyToManyField(
-        "auth.Permission",
-        blank=True,
-        related_name="rvkeeper_roles"
-    )
-
-    is_system = models.BooleanField(default=False)
-
-    created_at = models.DateTimeField(auto_now_add=True)
-
-    class Meta:
-        ordering = ["name"]
-        verbose_name = "Ruolo"
-        verbose_name_plural = "Ruoli"
-
-        constraints = [
-            models.UniqueConstraint(
-                fields=["workshop", "code"],
-                name="unique_role_code_per_workshop"
-            )
-        ]
-
-    def __str__(self):
-        return f"{self.workshop.name} - {self.name}"
 
 
 class Membership(models.Model):
@@ -96,54 +57,35 @@ class Membership(models.Model):
         settings.AUTH_USER_MODEL,
         on_delete=models.CASCADE,
         related_name="memberships",
-        verbose_name="Utente",
+        verbose_name=_("User"),
     )
 
     workshop = models.ForeignKey(
         Workshop,
         on_delete=models.CASCADE,
         related_name="memberships",
-        verbose_name="Officina",
+        verbose_name=_("Workshop"),
     )
 
-    role = models.ForeignKey(
-        Role,
-        on_delete=models.PROTECT,
-        related_name="memberships",
-        verbose_name="Ruolo",
-    )
-
-    is_active = models.BooleanField(default=True, verbose_name="Attiva")
+    is_active = models.BooleanField(default=True, verbose_name=_("Active"))
 
     created_at = models.DateTimeField(auto_now_add=True)
 
     class Meta:
         ordering = ["workshop", "user"]
-        verbose_name = "Appartenenza"
-        verbose_name_plural = "Appartenenze"
+        verbose_name = _("Workshop membership")
+        verbose_name_plural = _("Workshop memberships")
 
         constraints = [
             models.UniqueConstraint(
                 fields=["user", "workshop"],
                 name="unique_user_per_workshop",
                 violation_error_message=(
-                    "Questo utente ha già un'appartenenza per questa officina. "
-                    "Modifica quella esistente per cambiare ruolo."
+                    "This user already has a membership for this workshop. "
+                    "Edit the existing membership instead."
                 ),
             )
         ]
-
-    def clean(self):
-        super().clean()
-
-        if (
-            self.role_id
-            and self.workshop_id
-            and self.role.workshop_id != self.workshop_id
-        ):
-            raise ValidationError({
-                "role": "Il ruolo deve appartenere alla stessa officina."
-            })
 
     def save(self, *args, **kwargs):
         self.full_clean()
