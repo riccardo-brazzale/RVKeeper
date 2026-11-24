@@ -47,6 +47,14 @@ class WorkOrder(models.Model):
     )]
 
     workshop = models.ForeignKey("workshops.Workshop", on_delete=models.CASCADE, related_name="work_orders")
+    bom_template = models.ForeignKey(
+        "BillOfMaterials",
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name="work_orders",
+        verbose_name="Distinta base",
+    )
     customer = models.ForeignKey("clientandsuppliers.CamperOwner", on_delete=models.PROTECT, null=True, blank=True, related_name="work_orders", verbose_name="Cliente")
     vehicle = models.ForeignKey("fleet.Camper", on_delete=models.SET_NULL, null=True, blank=True, related_name="work_orders")
     ro_number = models.CharField(max_length=40)
@@ -90,6 +98,63 @@ class WorkOrder(models.Model):
 
     def __str__(self):
         return f"RO {self.ro_number} · {self.vehicle or self.customer or self.customer_name}"
+
+
+class BillOfMaterials(models.Model):
+    workshop = models.ForeignKey(
+        "workshops.Workshop",
+        on_delete=models.CASCADE,
+        related_name="bill_of_materials",
+    )
+    code = models.CharField(max_length=40)
+    name = models.CharField(max_length=200)
+    description = models.TextField(blank=True)
+    is_active = models.BooleanField(default=True)
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        ordering = ("name", "code")
+        constraints = [
+            models.UniqueConstraint(
+                fields=("workshop", "code"),
+                name="unique_bom_code_per_workshop",
+            ),
+        ]
+        verbose_name = "Distinta base"
+        verbose_name_plural = "Distinte base"
+
+    def __str__(self):
+        return f"{self.code} · {self.name}"
+
+
+class BillOfMaterialsLine(models.Model):
+    bom = models.ForeignKey(
+        BillOfMaterials,
+        on_delete=models.CASCADE,
+        related_name="lines",
+    )
+    title = models.CharField(max_length=200)
+    description = models.TextField(blank=True)
+    department = models.CharField(max_length=20, choices=[("technician", "Technician"), ("details", "Details")], default="technician")
+    specialty = models.CharField(max_length=20, default="general")
+    labor_article = models.ForeignKey(
+        "LaborArticle",
+        on_delete=models.PROTECT,
+        null=True,
+        blank=True,
+        related_name="+",
+    )
+    standard_minutes = models.PositiveIntegerField(default=0)
+    sequence = models.PositiveIntegerField(default=1)
+
+    class Meta:
+        ordering = ("sequence", "pk")
+        verbose_name = "Attività distinta base"
+        verbose_name_plural = "Attività distinte base"
+
+    def __str__(self):
+        return f"{self.sequence}. {self.title}"
 
 
 class Job(models.Model):
@@ -169,6 +234,15 @@ class PriceList(models.Model):
     workshop = models.ForeignKey("workshops.Workshop", on_delete=models.CASCADE, related_name="price_lists")
     code = models.CharField(max_length=40)
     name = models.CharField(max_length=160)
+    current_valid_from = models.DateField(
+        default=timezone.localdate,
+        verbose_name="Data validità attuale",
+    )
+    future_valid_from = models.DateField(
+        null=True,
+        blank=True,
+        verbose_name="Data validità futura",
+    )
     customer = models.ForeignKey(
         "clientandsuppliers.CamperOwner", on_delete=models.SET_NULL, null=True, blank=True,
         related_name="associated_price_lists", verbose_name="Codice cliente associato",
@@ -243,13 +317,6 @@ class PriceListItem(models.Model):
             ),
             models.CheckConstraint(
                 condition=(
-                    models.Q(future_price__isnull=True, future_valid_from__isnull=True)
-                    | models.Q(future_price__isnull=False, future_valid_from__isnull=False)
-                ),
-                name="future_price_has_matching_date",
-            ),
-            models.CheckConstraint(
-                condition=(
                     models.Q(previous_valid_from__isnull=True)
                     | models.Q(previous_valid_from__lt=models.F("valid_from"))
                 ),
@@ -266,8 +333,6 @@ class PriceListItem(models.Model):
 
     def clean(self):
         super().clean()
-        if self.price_list_id and self.price_list.customer_id:
-            raise ValidationError(_("Customer price lists can contain discounts, not item prices."))
         if self.previous_price is not None and self.previous_price < 0:
             raise ValidationError({"previous_price": _("Prices cannot be negative.")})
         if self.unit_price < 0:
@@ -276,8 +341,6 @@ class PriceListItem(models.Model):
             raise ValidationError({"future_price": _("Prices cannot be negative.")})
         if (self.previous_price is None) != (self.previous_valid_from is None):
             raise ValidationError(_("The previous price and its start date must be set together."))
-        if (self.future_price is None) != (self.future_valid_from is None):
-            raise ValidationError(_("The future price and its start date must be set together."))
         if self.previous_valid_from and self.previous_valid_from >= self.valid_from:
             raise ValidationError({"previous_valid_from": _("The previous price must start before the current price.")})
         if self.future_valid_from and self.future_valid_from <= self.valid_from:

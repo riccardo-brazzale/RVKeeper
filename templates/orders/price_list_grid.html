@@ -1,0 +1,61 @@
+{% extends "base.html" %}
+{% load i18n %}
+{% block title %}Griglia {{ price_list.code }} · RVKeeper{% endblock %}
+{% block content %}
+<div class="page-heading">
+    <div>
+        <h2>Griglia articoli · {{ price_list.code }}</h2>
+        <p>{{ price_list.name }} · Validità attuale: {{ price_list.current_valid_from|date:"d/m/Y" }}{% if price_list.future_valid_from %} · Validità futura: {{ price_list.future_valid_from|date:"d/m/Y" }}{% endif %}</p>
+    </div>
+    <div class="actions">
+        <a class="button-link" href="{% url 'price_list_edit' pk=price_list.pk %}">Testata</a>
+        <a class="button-link" href="{% url 'price_list_add_item' pk=price_list.pk %}">Aggiungi prezzo</a>
+    </div>
+</div>
+
+<section class="panel">
+    <form method="get" class="actions" style="margin-bottom:16px">
+        <input type="search" name="q" value="{{ search }}" placeholder="Codice, nome o descrizione">
+        <button type="submit">Cerca</button>
+    </form>
+    <form method="post">
+        {% csrf_token %}
+        <div class="table-wrap">
+            <table>
+                <thead>
+                    <tr>
+                        <th>Articolo</th>
+                        <th>Descrizione</th>
+                        <th>Prezzo passato</th>
+                        <th>Prezzo corrente</th>
+                        <th>Prezzo futuro</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    {% for row in rows %}
+                    <tr>
+                        <td><a href="{% url 'part_detail' pk=row.part.pk %}">{{ row.part.part_number }}</a></td>
+                        <td>{{ row.part.name }}</td>
+                        <td>{{ row.item.previous_price|default:"—" }}{% if row.item.previous_valid_from %}<br><small>{{ row.item.previous_valid_from|date:"d/m/Y" }}</small>{% endif %}</td>
+                        <td><input type="number" min="0" step="0.01" name="current_{{ row.part.pk }}" value="{{ row.item.unit_price|default:'' }}" style="max-width:140px"></td>
+                        <td><input type="number" min="0" step="0.01" name="future_{{ row.part.pk }}" value="{{ row.item.future_price|default:'' }}" style="max-width:140px"></td>
+                    </tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+        </div>
+        <button type="submit">Salva prezzi modificati</button>
+    </form>
+    {% if page_obj.paginator.num_pages > 1 %}
+        <nav class="pagination" aria-label="Paginazione griglia">
+            {% if page_obj.has_previous %}
+                <a href="?page={{ page_obj.previous_page_number }}{% if search %}&q={{ search|urlencode }}{% endif %}">Precedente</a>
+            {% endif %}
+            <span>Pagina {{ page_obj.number }} di {{ page_obj.paginator.num_pages }}</span>
+            {% if page_obj.has_next %}
+                <a href="?page={{ page_obj.next_page_number }}{% if search %}&q={{ search|urlencode }}{% endif %}">Successiva</a>
+            {% endif %}
+        </nav>
+    {% endif %}
+</section>
+{% endblock %}

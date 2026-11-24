@@ -6,7 +6,7 @@
 {% if contact.notes %}<section class="panel"><h3>{% translate "Notes" %}</h3><p>{{ contact.notes|linebreaksbr }}</p></section>{% endif %}
 {% if contact.is_customer %}<section class="panel"><h3>Listino cliente</h3>
 {% if contact.price_list_id %}
-<p><strong>Listino assegnato:</strong> <a href="{% url 'price_list_edit' pk=contact.price_list_id %}">{{ contact.price_list.code }} · {{ contact.price_list.name }}</a></p>
+<p><strong>Listino assegnato:</strong> {{ contact.price_list.code }} · {{ contact.price_list.name }}</p>
 {% if contact.price_list.customer_id == contact.pk %}
 <p><a class="button-link" href="{% url 'price_list_edit' pk=contact.price_list_id %}">Prezzi personalizzati</a></p>
 {% else %}

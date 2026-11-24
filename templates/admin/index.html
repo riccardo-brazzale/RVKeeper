@@ -1,0 +1,47 @@
+{% extends "admin/base_site.html" %}
+{% load i18n %}
+
+{% block content %}
+<div id="content-main">
+  {% if app_list %}
+    {% regroup app_list by section as section_list %}
+    {% for section in section_list %}
+      <h2 style="margin: 24px 0 12px;">{{ section.grouper }}</h2>
+      {% for app in section.list %}
+        <div class="app-{{ app.app_label }} module" style="margin-bottom: 16px;">
+          <table>
+            <caption>
+              <a href="{{ app.app_url }}" class="section" title="{% blocktranslate with name=app.name %}Models in the {{ name }} application{% endblocktranslate %}">
+                {{ app.name }}
+              </a>
+            </caption>
+            {% for model in app.models %}
+              <tr class="model-{{ model.object_name|lower }}">
+                {% if model.admin_url %}
+                  <th scope="row"><a href="{{ model.admin_url }}">{{ model.name }}</a></th>
+                {% else %}
+                  <th scope="row">{{ model.name }}</th>
+                {% endif %}
+                <td>
+                  {% if model.add_url %}
+                    <a href="{{ model.add_url }}" class="addlink">{% translate "Add" %}</a>
+                  {% endif %}
+                </td>
+                <td>
+                  {% if model.admin_url and model.view_only %}
+                    <a href="{{ model.admin_url }}" class="changelink">{% translate "View" %}</a>
+                  {% elif model.admin_url %}
+                    <a href="{{ model.admin_url }}" class="changelink">{% translate "Change" %}</a>
+                  {% endif %}
+                </td>
+              </tr>
+            {% endfor %}
+          </table>
+        </div>
+      {% endfor %}
+    {% endfor %}
+  {% else %}
+    <p>{% translate "You don't have permission to view or edit anything." %}</p>
+  {% endif %}
+</div>
+{% endblock %}

@@ -3,17 +3,66 @@ from django.contrib import admin
 from .models import (
     Attachment,
     AuditLog,
+    CustomerItemDiscount,
     DocumentCategory,
+    Job,
     JobAssignment,
     JobCall,
     JobNote,
     JobParticipation,
+    LaborArticle,
     Notification,
     PauseReason,
+    PriceList,
+    PriceListItem,
     TimeEvent,
     WarrantyClaim,
     WarrantyReturn,
+    WorkOrder,
 )
+
+
+@admin.register(WorkOrder)
+class WorkOrderAdmin(admin.ModelAdmin):
+    list_display = ("ro_number", "customer", "vehicle", "status", "work_classification", "invoiced", "created_at")
+    list_filter = ("workshop", "status", "work_classification", "warranty_status", "invoiced")
+    search_fields = ("ro_number", "customer_name", "customer__company_name", "vehicle__plate")
+    date_hierarchy = "created_at"
+
+
+@admin.register(Job)
+class JobAdmin(admin.ModelAdmin):
+    list_display = ("work_order", "job_number", "title", "status", "category", "department", "parts_ready")
+    list_filter = ("workshop", "status", "category", "department", "specialty")
+    search_fields = ("title", "work_order__ro_number")
+
+
+@admin.register(LaborArticle)
+class LaborArticleAdmin(admin.ModelAdmin):
+    list_display = ("code", "description", "tariff_type", "workshop", "is_active")
+    list_filter = ("workshop", "tariff_type", "is_active")
+    search_fields = ("code", "description")
+
+
+@admin.register(PriceList)
+class PriceListAdmin(admin.ModelAdmin):
+    list_display = ("code", "name", "workshop", "customer", "is_default", "is_workshop", "is_active")
+    list_filter = ("workshop", "is_default", "is_workshop", "is_active")
+    search_fields = ("code", "name", "customer__company_name")
+
+
+@admin.register(PriceListItem)
+class PriceListItemAdmin(admin.ModelAdmin):
+    list_display = ("price_list", "part", "labor_article", "article_class", "article_group", "unit_price", "valid_from")
+    list_filter = ("price_list", "valid_from")
+    search_fields = ("price_list__code", "part__part_number", "labor_article__code")
+
+
+@admin.register(CustomerItemDiscount)
+class CustomerItemDiscountAdmin(admin.ModelAdmin):
+    list_display = ("customer", "part", "labor_article", "article_class", "article_group", "discount_percent")
+    list_filter = ("customer",)
+    search_fields = ("customer__company_name", "part__part_number", "labor_article__code")
 
 
 @admin.register(DocumentCategory)

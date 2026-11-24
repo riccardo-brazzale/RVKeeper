@@ -1,0 +1,33 @@
+{% extends "base.html" %}
+{% load i18n %}
+{% block title %}Nuovo ordine fornitore · RVKeeper{% endblock %}
+{% block content %}
+<div class="page-heading"><div><h2>Nuovo ordine fornitore</h2></div></div>
+<section class="panel">
+    <form method="post">
+        {% csrf_token %}
+        {{ line_formset.management_form }}
+        {% if form.non_field_errors %}<div class="form-errors">{{ form.non_field_errors }}</div>{% endif %}
+        <div class="form-grid">
+            {% for field in form %}
+            <div class="form-field"><label for="{{ field.id_for_label }}">{{ field.label }}</label>{{ field }}{% for error in field.errors %}<div class="form-errors">{{ error }}</div>{% endfor %}</div>
+            {% endfor %}
+        </div>
+        <h3>Righe ordine</h3>
+        <div class="table-wrap">
+            <table>
+                <thead><tr><th>Ricambio</th><th>Quantità richiesta</th><th>Quantità ordinata</th><th>Prezzo unitario</th><th>Sconto %</th></tr></thead>
+                <tbody>
+                    {% for line in line_formset %}
+                    <tr>
+                        {% for hidden in line.hidden_fields %}{{ hidden }}{% endfor %}
+                        {% for field in line.visible_fields %}<td>{{ field }}{% for error in field.errors %}<div class="form-errors">{{ error }}</div>{% endfor %}</td>{% endfor %}
+                    </tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+        </div>
+        <button type="submit">Crea ordine fornitore</button>
+    </form>
+</section>
+{% endblock %}

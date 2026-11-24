@@ -1,0 +1,54 @@
+{% extends "base.html" %}
+{% load i18n %}
+{% block title %}Aggiungi prezzo · {{ price_list.code }}{% endblock %}
+{% block content %}
+<div class="page-heading">
+    <div><h2>Aggiungi prezzo · {{ price_list.code }}</h2><p>{{ price_list.name }}</p></div>
+    <div class="actions">
+        <a class="button-link" href="{% url 'price_list_grid' pk=price_list.pk %}">Prezzi</a>
+    </div>
+</div>
+<section class="panel">
+    <form method="get" class="actions" style="margin-bottom:16px">
+        <input type="search" name="q" value="{{ search }}" placeholder="Codice, nome o descrizione articolo">
+        <button type="submit">Cerca</button>
+    </form>
+    <form method="post">
+        {% csrf_token %}
+        <div class="table-wrap">
+            <table>
+                <thead><tr><th></th><th>Codice</th><th>Descrizione</th></tr></thead>
+                <tbody>
+                    {% for part in parts %}
+                    <tr>
+                        <td><input type="radio" name="part" value="{{ part.pk }}" required></td>
+                        <td>{{ part.part_number }}</td>
+                        <td>{{ part.name }}</td>
+                    </tr>
+                    {% empty %}
+                    <tr><td colspan="3">Nessun articolo trovato.</td></tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+        </div>
+        {% if page_obj.paginator.num_pages > 1 %}
+        <nav class="pagination" aria-label="Paginazione articoli">
+            {% if page_obj.has_previous %}<a href="?page={{ page_obj.previous_page_number }}{% if search %}&q={{ search|urlencode }}{% endif %}">Precedente</a>{% endif %}
+            <span>Pagina {{ page_obj.number }} di {{ page_obj.paginator.num_pages }}</span>
+            {% if page_obj.has_next %}<a href="?page={{ page_obj.next_page_number }}{% if search %}&q={{ search|urlencode }}{% endif %}">Successiva</a>{% endif %}
+        </nav>
+        {% endif %}
+        <div class="form-grid" style="margin-top:18px">
+            <div class="form-field">
+                <label for="current_price">Prezzo corrente</label>
+                <input id="current_price" name="current_price" type="number" min="0" step="0.01" required>
+            </div>
+            <div class="form-field">
+                <label for="future_price">Prezzo futuro</label>
+                <input id="future_price" name="future_price" type="number" min="0" step="0.01">
+            </div>
+        </div>
+        <button type="submit">Aggiungi prezzo</button>
+    </form>
+</section>
+{% endblock %}

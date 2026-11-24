@@ -4,7 +4,7 @@
 {% block content %}
 <div class="page-heading"><div><h2>Listini fornitori</h2><p>Listini salvati localmente e selezionati in base alla data dell'ordine.</p></div></div>
 <section class="panel">
-    <h3>Importa un listino CSV o Excel</h3>
+    <h3>Importa un listino Excel</h3>
     {% if errors %}<div class="alert alert-error" role="alert"><strong>Rapporto di validazione</strong><ul>{% for error in errors %}<li>{{ error }}</li>{% endfor %}</ul></div>{% endif %}
     <form method="post" enctype="multipart/form-data" action="{% url 'supplier_price_list_import' %}">
         {% csrf_token %}
@@ -14,9 +14,9 @@
             <div class="form-field"><label for="name">Nome listino</label><input id="name" name="name" maxlength="160"></div>
             <div class="form-field"><label for="valid_from">Valido dal</label><input id="valid_from" name="valid_from" type="date" required></div>
             <div class="form-field"><label for="valid_to">Valido fino al</label><input id="valid_to" name="valid_to" type="date"></div>
-            <div class="form-field"><label for="file">File CSV o Excel (.xlsx)</label><input id="file" name="file" type="file" accept=".csv,.xlsx" required></div>
+            <div class="form-field"><label for="file">File Excel (.xlsx)</label><input id="file" name="file" type="file" accept=".xlsx" required></div>
         </div>
-        <p>Colonne richieste: <code>codice_articolo_fornitore</code>, <code>prezzo</code>. Colonne facoltative: <code>codice_interno</code>, <code>sconto</code>.</p>
+        <p>Colonne obbligatorie: <code>codice_articolo_fornitore</code>, <code>codice_interno</code> (codice esatto dell'articolo in anagrafica), <code>prezzo</code>. Colonna facoltativa: <code>sconto</code>.</p>
         <button type="submit">Valida e importa</button>
     </form>
 </section>

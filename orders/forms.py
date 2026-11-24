@@ -6,7 +6,14 @@ from django.utils.translation import gettext_lazy as _
 
 from clientandsuppliers.models import CamperOwner
 from parts.models import ArticleClass, ArticleGroup, Part
-from .models import CustomerItemDiscount, LaborArticle, PriceList, PriceListItem
+from .models import (
+    BillOfMaterials,
+    BillOfMaterialsLine,
+    CustomerItemDiscount,
+    LaborArticle,
+    PriceList,
+    PriceListItem,
+)
 
 
 def _validate_price_dates(form, cleaned):
@@ -35,27 +42,26 @@ class CustomerCodeChoiceField(forms.ModelChoiceField):
 class PriceListForm(forms.ModelForm):
     class Meta:
         model = PriceList
-        exclude = ("workshop", "is_default", "is_workshop")
+        fields = ("code", "name", "customer", "current_valid_from", "future_valid_from", "is_active")
+        widgets = {
+            "current_valid_from": forms.DateInput(attrs={"type": "date"}),
+            "future_valid_from": forms.DateInput(attrs={"type": "date"}),
+        }
 
     def __init__(self, *args, workshop, customer=None, **kwargs):
         super().__init__(*args, **kwargs)
-        self.fields["customer"] = CustomerCodeChoiceField(
-            queryset=CamperOwner.objects.filter(workshop=workshop, kind__in=("customer", "both")),
-            required=False,
-            label=_("Customer code association"),
-            empty_label=_("Generic price list"),
-        )
-        if not self.instance.pk:
-            self.fields["customer"].required = True
         if customer is not None:
-            self.fields["customer"].initial = customer
-            self.fields["customer"].disabled = True
-            self.fields["code"].initial = customer.customer_code
-            self.fields["code"].disabled = True
-        elif self.instance.customer_id:
-            self.fields["customer"].initial = self.instance.customer
-            self.fields["customer"].disabled = True
-            self.fields["code"].initial = self.instance.customer.customer_code
+            self.fields.pop("customer", None)
+            self.fields.pop("code", None)
+        else:
+            self.fields["customer"] = CustomerCodeChoiceField(
+                queryset=CamperOwner.objects.filter(workshop=workshop, kind__in=("customer", "both")),
+                required=False,
+                label=_("Customer code association"),
+                empty_label=_("Generic price list"),
+            )
+            if not self.instance.pk:
+                self.fields["customer"].required = True
 
     def clean(self):
         cleaned = super().clean()
@@ -233,4 +239,33 @@ class CustomerItemDiscountForm(forms.ModelForm):
 
 CustomerItemDiscountFormSet = inlineformset_factory(
     CamperOwner, CustomerItemDiscount, form=CustomerItemDiscountForm, extra=3, can_delete=True,
+)
+
+
+class BillOfMaterialsForm(forms.ModelForm):
+    class Meta:
+        model = BillOfMaterials
+        fields = ("code", "name", "description", "is_active")
+
+
+class BillOfMaterialsLineForm(forms.ModelForm):
+    class Meta:
+        model = BillOfMaterialsLine
+        fields = ("sequence", "title", "description", "department", "specialty", "labor_article", "standard_minutes")
+
+    def __init__(self, *args, workshop, **kwargs):
+        super().__init__(*args, **kwargs)
+        if "labor_article" in self.fields:
+            self.fields["labor_article"].queryset = LaborArticle.objects.filter(
+                workshop=workshop,
+                is_active=True,
+            ).order_by("code")
+
+
+BillOfMaterialsLineFormSet = inlineformset_factory(
+    BillOfMaterials,
+    BillOfMaterialsLine,
+    form=BillOfMaterialsLineForm,
+    extra=1,
+    can_delete=True,
 )

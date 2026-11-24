@@ -11,6 +11,7 @@ from django.contrib.auth import get_user_model
 from django.contrib.auth.decorators import login_required
 from django.core import serializers
 from django.core.exceptions import ValidationError
+from django.core.paginator import Paginator
 from django.db import models, transaction
 from django.db.models import Count, Exists, OuterRef, Sum
 from django.forms import modelform_factory
@@ -44,6 +45,8 @@ from orders.time_reporting import build_time_report, export_time_report_excel, e
 from orders.models import (
     Attachment,
     AuditLog,
+    BillOfMaterials,
+    BillOfMaterialsLine,
     DocumentCategory,
     Job,
     JobAssignment,
@@ -85,6 +88,8 @@ from quotes.models import Quote, QuoteLine
 from workshops.models import Membership, Workshop
 
 from .forms import (
+    BillOfMaterialsForm,
+    BillOfMaterialsLineFormSet,
     CustomerItemDiscountFormSet,
     LaborArticleListEntryFormSet,
     PriceListForm,
@@ -632,6 +637,19 @@ def workflow_create(request, module):
                 Workshop.objects.select_for_update().get(pk=workshop.pk)
                 obj.ro_number = next_ro_number(workshop)
                 obj.save()
+                if obj.bom_template_id:
+                    for line in obj.bom_template.lines.select_related("labor_article").all():
+                        Job.objects.create(
+                            workshop=workshop,
+                            work_order=obj,
+                            job_number=_next_job_number(obj),
+                            title=line.title,
+                            labor_article=line.labor_article,
+                            description=line.description,
+                            department=line.department,
+                            specialty=line.specialty,
+                            standard_minutes=line.standard_minutes,
+                        )
         elif isinstance(obj, Job):
             with transaction.atomic():
                 locked_order = WorkOrder.objects.select_for_update().get(
@@ -1575,6 +1593,7 @@ def work_order_billing(request, pk):
         "effective_date": effective_date,
         "parts_formset": parts_formset,
         "labor_formset": labor_formset,
+        "item_page": item_page,
         "usage_formset": usage_formset,
     })
 
@@ -1954,12 +1973,95 @@ def _catalog_context(request):
 
 
 @login_required
+def bom_list(request):
+    if getattr(request.user, "profile", "") != "admin" and not request.user.is_superuser:
+        return HttpResponseForbidden("Solo gli amministratori possono gestire le distinte base.")
+    workshop = _catalog_context(request)
+    boms = BillOfMaterials.objects.filter(workshop=workshop).annotate(
+        line_count=Count("lines")
+    ) if workshop else BillOfMaterials.objects.none()
+    search = request.GET.get("q", "").strip()
+    if search:
+        boms = boms.filter(
+            models.Q(code__icontains=search)
+            | models.Q(name__icontains=search)
+            | models.Q(description__icontains=search)
+        )
+    page = Paginator(boms.order_by("name", "code"), 50).get_page(request.GET.get("page"))
+    return render(request, "orders/bom_list.html", {
+        "boms": page,
+        "page_obj": page,
+        "search": search,
+        "has_workshop": workshop is not None,
+    })
+
+
+@login_required
+def bom_form(request, pk=None):
+    if getattr(request.user, "profile", "") != "admin" and not request.user.is_superuser:
+        return HttpResponseForbidden("Solo gli amministratori possono gestire le distinte base.")
+    workshop = _catalog_context(request)
+    if workshop is None:
+        return redirect("home")
+    bom = get_object_or_404(BillOfMaterials, pk=pk, workshop=workshop) if pk else BillOfMaterials(workshop=workshop)
+    form = BillOfMaterialsForm(request.POST or None, instance=bom)
+    line_formset = BillOfMaterialsLineFormSet(
+        request.POST or None,
+        instance=bom,
+        form_kwargs={"workshop": workshop},
+    )
+    if request.method == "POST" and form.is_valid() and line_formset.is_valid():
+        with transaction.atomic():
+            bom = form.save(commit=False)
+            bom.workshop = workshop
+            bom.save()
+            line_formset.instance = bom
+            line_formset.save()
+        messages.success(request, "Distinta base salvata.")
+        return redirect("bom_edit", pk=bom.pk)
+    return render(request, "orders/bom_form.html", {
+        "form": form,
+        "line_formset": line_formset,
+        "bom": bom,
+    })
+
+
+@login_required
 def price_list_list(request):
     if getattr(request.user, "profile", "") != "admin" and not request.user.is_superuser:
         return HttpResponseForbidden("Solo il personale d'ufficio può gestire i listini.")
     workshop = _catalog_context(request)
-    lists = PriceList.objects.filter(workshop=workshop).select_related("customer") if workshop else PriceList.objects.none()
-    return render(request, "orders/price_list_list.html", {"price_lists": lists, "has_workshop": workshop is not None})
+    lists = (
+        PriceList.objects.filter(workshop=workshop)
+        .select_related("customer")
+        .annotate(item_count=Count("items"))
+        if workshop else PriceList.objects.none()
+    )
+    search = request.GET.get("q", "").strip()
+    if search:
+        lists = lists.filter(
+            models.Q(code__icontains=search)
+            | models.Q(name__icontains=search)
+            | models.Q(customer__company_name__icontains=search)
+            | models.Q(customer__first_name__icontains=search)
+            | models.Q(customer__last_name__icontains=search)
+        )
+    kind = request.GET.get("tipo", "").strip()
+    if kind == "cliente":
+        lists = lists.filter(customer__isnull=False)
+    elif kind == "generale":
+        lists = lists.filter(customer__isnull=True)
+    elif kind == "rotabile":
+        lists = lists.filter(customer__isnull=True)
+    lists = lists.order_by("-is_default", "-is_workshop", "name", "code")
+    page = Paginator(lists, 50).get_page(request.GET.get("page"))
+    return render(request, "orders/price_list_list.html", {
+        "price_lists": page,
+        "page_obj": page,
+        "has_workshop": workshop is not None,
+        "search": search,
+        "kind": kind,
+    })
 
 
 @login_required
@@ -1986,6 +2088,155 @@ def price_list_rotate(request, pk):
 
 
 @login_required
+def price_list_add_item(request, pk):
+    if getattr(request.user, "profile", "") != "admin" and not request.user.is_superuser:
+        return HttpResponseForbidden("Solo il personale d'ufficio può gestire i listini.")
+    workshop = _catalog_context(request)
+    if workshop is None:
+        return redirect("home")
+    price_list = get_object_or_404(PriceList, pk=pk, workshop=workshop)
+
+    search = request.GET.get("q", "").strip()
+    parts = Part.objects.filter(workshop=workshop).order_by("part_number", "name")
+    if search:
+        parts = parts.filter(
+            models.Q(part_number__icontains=search)
+            | models.Q(name__icontains=search)
+            | models.Q(description__icontains=search)
+        )
+    page = Paginator(parts, 50).get_page(request.GET.get("page"))
+
+    if request.method == "POST":
+        try:
+            part = Part.objects.get(pk=request.POST.get("part"), workshop=workshop)
+        except (Part.DoesNotExist, TypeError, ValueError):
+            messages.error(request, "Seleziona un articolo valido.")
+            return redirect("price_list_add_item", pk=price_list.pk)
+        current_raw = request.POST.get("current_price", "").strip().replace(",", ".")
+        future_raw = request.POST.get("future_price", "").strip().replace(",", ".")
+        if not current_raw:
+            messages.error(request, "Il prezzo corrente è obbligatorio.")
+            return redirect("price_list_add_item", pk=price_list.pk)
+        try:
+            current_price = Decimal(current_raw)
+            future_price = Decimal(future_raw) if future_raw else None
+        except Exception:
+            messages.error(request, "Inserisci prezzi numerici validi.")
+            return redirect("price_list_add_item", pk=price_list.pk)
+        if current_price < 0 or (future_price is not None and future_price < 0):
+            messages.error(request, "I prezzi non possono essere negativi.")
+            return redirect("price_list_add_item", pk=price_list.pk)
+        item, created = PriceListItem.objects.get_or_create(
+            price_list=price_list,
+            part=part,
+            defaults={
+                "unit_price": current_price,
+                "valid_from": price_list.current_valid_from,
+                "future_price": future_price,
+                "future_valid_from": price_list.future_valid_from,
+            },
+        )
+        if not created:
+            messages.error(request, "Esiste già un prezzo per questo articolo nel listino.")
+        else:
+            messages.success(request, "Prezzo aggiunto al listino.")
+        return redirect("price_list_grid", pk=price_list.pk)
+
+    return render(request, "orders/price_list_add_item.html", {
+        "price_list": price_list,
+        "parts": page,
+        "page_obj": page,
+        "search": search,
+    })
+
+
+@login_required
+def price_list_grid(request, pk):
+    if getattr(request.user, "profile", "") != "admin" and not request.user.is_superuser:
+        return HttpResponseForbidden("Solo il personale d'ufficio può gestire i listini.")
+    workshop = _catalog_context(request)
+    if workshop is None:
+        return redirect("home")
+    price_list = get_object_or_404(PriceList, pk=pk, workshop=workshop)
+
+    if request.method == "POST":
+        changed_count = 0
+        with transaction.atomic():
+            for key, value in request.POST.items():
+                if not key.startswith("current_") and not key.startswith("future_"):
+                    continue
+                field, item_id = key.rsplit("_", 1)
+                try:
+                    part_id = int(item_id)
+                except (TypeError, ValueError):
+                    continue
+                part = Part.objects.filter(pk=part_id, workshop=workshop).first()
+                if part is None:
+                    continue
+                item, _ = PriceListItem.objects.get_or_create(
+                    price_list=price_list,
+                    part=part,
+                    defaults={
+                        "valid_from": price_list.current_valid_from,
+                        "unit_price": Decimal("0"),
+                    },
+                )
+                raw = value.strip().replace(",", ".")
+                if not raw:
+                    if field == "future":
+                        item.future_price = None
+                        item.future_valid_from = None
+                        changed_count += 1
+                        item.save(update_fields=("future_price", "future_valid_from"))
+                    continue
+                try:
+                    price = Decimal(raw)
+                except Exception:
+                    continue
+                if price is not None and price < 0:
+                    continue
+                if field == "current":
+                    item.unit_price = price or Decimal("0")
+                    item.valid_from = price_list.current_valid_from
+                    changed_count += 1
+                else:
+                    item.future_price = price
+                    item.future_valid_from = price_list.future_valid_from
+                    changed_count += 1
+                item.full_clean()
+                item.save()
+            if changed_count:
+                messages.success(request, f"Aggiornate {changed_count} celle prezzo.")
+        return redirect(f"{reverse('price_list_grid', args=(price_list.pk,))}?{request.META.get('QUERY_STRING', '')}")
+
+    search = request.GET.get("q", "").strip()
+    items = PriceListItem.objects.filter(
+        price_list=price_list,
+        part__isnull=False,
+    ).select_related("part").order_by("part__part_number", "pk")
+    if search:
+        items = items.filter(
+            models.Q(part__part_number__icontains=search)
+            | models.Q(part__name__icontains=search)
+            | models.Q(part__description__icontains=search)
+        )
+    page = Paginator(items, 50).get_page(request.GET.get("page"))
+    rows = [
+        {
+            "part": item.part,
+            "item": item,
+        }
+        for item in page.object_list
+    ]
+    return render(request, "orders/price_list_grid.html", {
+        "price_list": price_list,
+        "rows": rows,
+        "page_obj": page,
+        "search": search,
+    })
+
+
+@login_required
 def price_list_form(request, pk=None):
     if getattr(request.user, "profile", "") != "admin" and not request.user.is_superuser:
         messages.error(request, "Solo il personale d'ufficio può gestire i listini.")
@@ -1996,6 +2247,25 @@ def price_list_form(request, pk=None):
     price_list = get_object_or_404(PriceList, pk=pk, workshop=workshop) if pk else PriceList(workshop=workshop)
 
     customer = price_list.customer if price_list.customer_id else None
+    customer_page = None
+    customer_search = ""
+    if not pk:
+        customer_search = request.GET.get("customer_q", "").strip()
+        customer_queryset = CamperOwner.objects.filter(
+            workshop=workshop,
+            kind__in=("customer", "both"),
+        )
+        if customer_search:
+            customer_queryset = customer_queryset.filter(
+                models.Q(company_name__icontains=customer_search)
+                | models.Q(first_name__icontains=customer_search)
+                | models.Q(last_name__icontains=customer_search)
+                | models.Q(email__icontains=customer_search)
+            )
+        customer_page = Paginator(
+            customer_queryset.order_by("last_name", "first_name", "company_name", "pk"),
+            50,
+        ).get_page(request.GET.get("customer_page"))
     if not pk and request.GET.get("customer"):
         customer = get_object_or_404(
             CamperOwner, pk=request.GET["customer"], workshop=workshop, kind__in=("customer", "both")
@@ -2016,23 +2286,7 @@ def price_list_form(request, pk=None):
     if customer is None and form.is_bound:
         customer = form.cleaned_data.get("customer")
     is_customer_list = customer is not None
-    item_formset = None if is_customer_list else PriceListItemFormSet(
-        request.POST or None, instance=price_list, form_kwargs={"workshop": workshop},
-    )
-    discount_formset = CustomerItemDiscountFormSet(
-        request.POST or None,
-        instance=customer,
-        form_kwargs={"workshop": workshop},
-    ) if is_customer_list else None
-    labor_formset = LaborArticleListEntryFormSet(
-        request.POST or None,
-        prefix="labor_codes",
-        form_kwargs={"workshop": workshop},
-    ) if allow_labor_creation and not is_customer_list else None
-    item_formset_valid = item_formset.is_valid() if item_formset is not None else True
-    discount_formset_valid = discount_formset.is_valid() if discount_formset is not None else True
-    labor_formset_valid = labor_formset.is_valid() if labor_formset is not None else True
-    valid = form_valid and item_formset_valid and discount_formset_valid and labor_formset_valid
+    valid = form_valid
     if request.method == "POST" and valid:
         price_list = form.save(commit=False)
         price_list.workshop = workshop
@@ -2046,30 +2300,11 @@ def price_list_form(request, pk=None):
                     PriceList.objects.filter(pk=price_list.pk).values_list("customer_id", flat=True).first()
                     if price_list.pk else None
                 )
+                if customer is not None:
+                    price_list.customer = customer
+                    price_list.code = customer.customer_code
+                    price_list.name = f"Listino {customer}"
                 price_list.save()
-                if item_formset is not None:
-                    item_formset.instance = price_list
-                    item_formset.save()
-                if discount_formset is not None:
-                    discount_formset.instance = price_list.customer
-                    discount_formset.save()
-                if labor_formset is not None:
-                    for labor_form in labor_formset:
-                        if not labor_form.has_changed():
-                            continue
-                        article = labor_form.save(commit=False)
-                        article.workshop = workshop
-                        article.save()
-                        PriceListItem.objects.create(
-                            price_list=price_list,
-                            labor_article=article,
-                            previous_price=labor_form.cleaned_data["previous_price"],
-                            previous_valid_from=labor_form.cleaned_data["previous_valid_from"],
-                            unit_price=labor_form.cleaned_data["unit_price"],
-                            valid_from=labor_form.cleaned_data["valid_from"],
-                            future_price=labor_form.cleaned_data["future_price"],
-                            future_valid_from=labor_form.cleaned_data["future_valid_from"],
-                        )
                 if price_list.is_default:
                     ensure_workshop_price_list(workshop)
 
@@ -2087,10 +2322,8 @@ def price_list_form(request, pk=None):
             return redirect("customer_detail", pk=customer.pk) if customer_from_contact else redirect("price_lists")
     return render(request, "orders/price_list_form.html", {
         "form": form,
-        "item_formset": item_formset,
-        "discount_formset": discount_formset,
-        "labor_formset": labor_formset,
-        "allow_labor_creation": allow_labor_creation,
+        "customer_page": customer_page,
+        "customer_search": customer_search,
         "can_rotate": bool(price_list.pk and price_list.customer_id is None),
         "price_list": price_list if price_list.pk else None,
         "title": "Modifica listino" if price_list.pk else "Nuovo listino",

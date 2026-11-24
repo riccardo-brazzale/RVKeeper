@@ -13,6 +13,16 @@ APP_ORDER = {
     "quotes": 6,
 }
 
+APP_SECTIONS = {
+    "workshops": "1 - Organizzazione",
+    "accounts": "1 - Organizzazione",
+    "clientandsuppliers": "2 - Anagrafiche",
+    "fleet": "2 - Anagrafiche",
+    "orders": "3 - Officina e commercialità",
+    "parts": "4 - Magazzino e approvvigionamento",
+    "quotes": "3 - Officina e commercialità",
+}
+
 MODEL_ORDER = {
     ("workshops", "workshop"): 0,
     ("workshops", "role"): 1,
@@ -25,6 +35,9 @@ MODEL_ORDER = {
 def ordered_admin_app_list(site, request, app_label=None):
     app_dict = site._build_app_dict(request, app_label)
     app_list = list(app_dict.values())
+
+    for app in app_list:
+        app["section"] = APP_SECTIONS.get(app["app_label"], "5 - Sistema")
 
     for app in app_list:
         app["models"].sort(

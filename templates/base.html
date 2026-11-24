@@ -162,6 +162,7 @@
                 <a href="{% url 'customers' %}" {% if request.resolver_match.url_name == 'customers' or request.resolver_match.url_name == 'customer_create' %}aria-current="page"{% endif %}>{% translate "Customers and suppliers" %}</a>
                 <a href="{% url 'fleet:camper_list' %}" {% if request.resolver_match.namespace == 'fleet' %}aria-current="page"{% endif %}>{% translate "Fleet" %}</a>
                 <a href="{% url 'price_lists' %}" {% if request.resolver_match.url_name == 'price_lists' or request.resolver_match.url_name == 'price_list_create' or request.resolver_match.url_name == 'price_list_edit' or request.resolver_match.url_name == 'price_list_rotate' %}aria-current="page"{% endif %}>Listini</a>
+                <a href="{% url 'bom_list' %}" {% if request.resolver_match.url_name == 'bom_list' or request.resolver_match.url_name == 'bom_create' or request.resolver_match.url_name == 'bom_edit' %}aria-current="page"{% endif %}>Distinte base</a>
                 {% endif %}
                 <a href="{% url 'inventory' %}" {% if request.resolver_match.url_name == 'inventory' or request.resolver_match.url_name == 'part_create' %}aria-current="page"{% endif %}>{% translate "Parts catalog" %}</a>
                 <a href="{% url 'purchase_order_list' %}" {% if request.resolver_match.url_name == 'purchase_order_list' or request.resolver_match.url_name == 'purchase_order_detail' or request.resolver_match.url_name == 'purchase_order_receive' %}aria-current="page"{% endif %}>Ordini fornitori</a>

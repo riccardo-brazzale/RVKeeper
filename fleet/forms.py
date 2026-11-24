@@ -7,7 +7,7 @@ from django.forms import BaseFormSet, formset_factory, modelformset_factory
 from django.utils.translation import gettext_lazy as _
 
 from clientandsuppliers.models import CamperOwner
-from orders.models import Job, WorkOrder
+from orders.models import BillOfMaterials, Job, WorkOrder
 from .models import Camper, CamperPhoto
 from parts.forms import PartDocumentForm, PartSupplierOfferForm
 from parts.models import JobPartUsage, Part, PartsRequest
@@ -41,6 +41,12 @@ class TimeReportFilterForm(forms.Form):
 
     def __init__(self, *args, workshop, **kwargs):
         super().__init__(*args, **kwargs)
+        self.fields["bom_template"] = forms.ModelChoiceField(
+            queryset=BillOfMaterials.objects.filter(workshop=workshop, is_active=True),
+            required=False,
+            label=_("Distinta base"),
+            help_text=_("Alla creazione aggiunge automaticamente tutte le attività previste."),
+        )
         user_model = get_user_model()
         self.fields["technician"].queryset = (
             user_model.objects.filter(profile="mechanic")

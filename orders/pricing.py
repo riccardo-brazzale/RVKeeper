@@ -83,10 +83,11 @@ def resolve_item_price(customer, *, part=None, labor_article=None, effective_dat
         if (
             assigned_list.workshop_id == workshop.pk
             and assigned_list.is_active
-            and assigned_list.customer_id is None
         ):
             candidates.append(assigned_list)
-    if not candidates or not candidates[0].is_default:
+    if candidates and candidates[0].customer_id:
+        candidates = candidates[:1]
+    elif not candidates or not candidates[0].is_default:
         if workshop_list and workshop_list not in candidates:
             candidates.append(workshop_list)
     if default_list and default_list not in candidates:

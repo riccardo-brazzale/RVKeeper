@@ -1,0 +1,42 @@
+{% extends "base.html" %}
+{% load i18n %}
+{% block title %}Distinte base · RVKeeper{% endblock %}
+{% block content %}
+<div class="page-heading">
+    <div><h2>Distinte base</h2><p>Modelli ripetibili di attività per gli ordini cliente.</p></div>
+    <a class="button-link" href="{% url 'bom_create' %}">Nuova distinta base</a>
+</div>
+<section class="panel">
+    <form method="get" class="actions" style="margin-bottom:16px">
+        <input type="search" name="q" value="{{ search }}" placeholder="Codice o nome distinta">
+        <button type="submit">Cerca</button>
+    </form>
+    {% if boms %}
+    <div class="table-wrap">
+        <table>
+            <thead><tr><th>Codice</th><th>Nome</th><th>Attività</th><th>Stato</th><th>Azioni</th></tr></thead>
+            <tbody>
+                {% for bom in boms %}
+                <tr>
+                    <td><a href="{% url 'bom_edit' pk=bom.pk %}">{{ bom.code }}</a></td>
+                    <td>{{ bom.name }}</td>
+                    <td>{{ bom.line_count }}</td>
+                    <td>{% if bom.is_active %}Attiva{% else %}Disattivata{% endif %}</td>
+                    <td><a class="button-link" href="{% url 'bom_edit' pk=bom.pk %}">Attività</a></td>
+                </tr>
+                {% endfor %}
+            </tbody>
+        </table>
+    </div>
+    {% else %}
+    <p>Nessuna distinta base. Usa “Nuova distinta base” per crearne una.</p>
+    {% endif %}
+    {% if page_obj.paginator.num_pages > 1 %}
+    <nav class="pagination" aria-label="Paginazione distinte">
+        {% if page_obj.has_previous %}<a href="?page={{ page_obj.previous_page_number }}{% if search %}&q={{ search|urlencode }}{% endif %}">Precedente</a>{% endif %}
+        <span>Pagina {{ page_obj.number }} di {{ page_obj.paginator.num_pages }}</span>
+        {% if page_obj.has_next %}<a href="?page={{ page_obj.next_page_number }}{% if search %}&q={{ search|urlencode }}{% endif %}">Successiva</a>{% endif %}
+    </nav>
+    {% endif %}
+</section>
+{% endblock %}
