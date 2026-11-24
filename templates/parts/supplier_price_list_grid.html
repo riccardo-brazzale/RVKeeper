@@ -1,0 +1,49 @@
+{% extends "base.html" %}
+{% load i18n %}
+{% block title %}Prezzi fornitore · {{ price_list.code }}{% endblock %}
+{% block content %}
+<div class="page-heading">
+    <div><h2>Prezzi fornitore · {{ price_list.code }}</h2><p>{{ price_list.supplier }} · Validità attuale: {{ price_list.valid_from|date:"d/m/Y" }}{% if price_list.valid_to %} · Futura: {{ price_list.valid_to|date:"d/m/Y" }}{% endif %}</p></div>
+    <div class="actions">
+        <a class="button-link" href="{% url 'supplier_price_list_detail' pk=price_list.pk %}">Testata</a>
+        <a class="button-link" href="{% url 'supplier_price_list_add_item' pk=price_list.pk %}">Aggiungi prezzo</a>
+    </div>
+</div>
+<section class="panel">
+    <form method="get" class="actions" style="margin-bottom:16px">
+        <input type="search" name="q" value="{{ search }}" placeholder="Codice articolo fornitore o articolo interno">
+        <button type="submit">Cerca</button>
+    </form>
+    <form method="post">
+        {% csrf_token %}
+        <div class="table-wrap">
+            <table>
+                <thead><tr><th>Codice fornitore</th><th>Articolo interno</th><th>Descrizione</th><th>UM</th><th>Prezzo passato</th><th>Prezzo corrente</th><th>Prezzo futuro</th></tr></thead>
+                <tbody>
+                    {% for item in items %}
+                    <tr>
+                        <td>{{ item.supplier_article_code }}</td>
+                        <td><a href="{% url 'part_detail' pk=item.part_id %}">{{ item.part.part_number }}</a></td>
+                        <td>{{ item.part.name }}</td>
+                        <td>{{ item.part.unit }}</td>
+                        <td>{{ item.previous_price|default:"—" }}</td>
+                        <td><input type="number" min="0" step="0.01" name="current_{{ item.pk }}" value="{{ item.unit_price }}" style="max-width:140px"></td>
+                        <td><input type="number" min="0" step="0.01" name="future_{{ item.pk }}" value="{{ item.future_price|default:'' }}" style="max-width:140px"></td>
+                    </tr>
+                    {% empty %}
+                    <tr><td colspan="7">Nessun prezzo presente. Usa “Aggiungi prezzo”.</td></tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+        </div>
+        {% if items %}<button type="submit">Salva prezzi</button>{% endif %}
+    </form>
+    {% if page_obj.paginator.num_pages > 1 %}
+    <nav class="pagination" aria-label="Paginazione prezzi fornitore">
+        {% if page_obj.has_previous %}<a href="?page={{ page_obj.previous_page_number }}{% if search %}&q={{ search|urlencode }}{% endif %}">Precedente</a>{% endif %}
+        <span>Pagina {{ page_obj.number }} di {{ page_obj.paginator.num_pages }}</span>
+        {% if page_obj.has_next %}<a href="?page={{ page_obj.next_page_number }}{% if search %}&q={{ search|urlencode }}{% endif %}">Successiva</a>{% endif %}
+    </nav>
+    {% endif %}
+</section>
+{% endblock %}

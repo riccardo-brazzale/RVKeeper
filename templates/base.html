@@ -159,12 +159,13 @@
             {% if user.profile != 'mechanic' or user.is_superuser %}<details class="sidebar-group" {% if request.resolver_match.url_name == 'customers' or request.resolver_match.url_name == 'customer_create' or request.resolver_match.namespace == 'fleet' or request.resolver_match.url_name == 'inventory' or request.resolver_match.url_name == 'part_create' or request.resolver_match.url_name == 'price_lists' or request.resolver_match.url_name == 'price_list_create' or request.resolver_match.url_name == 'price_list_edit' or request.resolver_match.url_name == 'price_list_rotate' or request.resolver_match.url_name == 'purchase_order_list' or request.resolver_match.url_name == 'purchase_order_detail' or request.resolver_match.url_name == 'purchase_order_receive' or request.resolver_match.url_name == 'supplier_price_list_list' or request.resolver_match.url_name == 'supplier_price_list_import' %}open{% endif %}>
                 <summary class="sidebar-label">{% translate "Master data" %}</summary>
                 {% if user.profile == 'admin' %}
-                <a href="{% url 'customers' %}" {% if request.resolver_match.url_name == 'customers' or request.resolver_match.url_name == 'customer_create' %}aria-current="page"{% endif %}>{% translate "Customers and suppliers" %}</a>
+                <a href="{% url 'customer_list' %}" {% if request.resolver_match.url_name == 'customer_list' %}aria-current="page"{% endif %}>Clienti</a>
+                <a href="{% url 'supplier_list' %}" {% if request.resolver_match.url_name == 'supplier_list' %}aria-current="page"{% endif %}>Fornitori</a>
                 <a href="{% url 'fleet:camper_list' %}" {% if request.resolver_match.namespace == 'fleet' %}aria-current="page"{% endif %}>{% translate "Fleet" %}</a>
                 <a href="{% url 'price_lists' %}" {% if request.resolver_match.url_name == 'price_lists' or request.resolver_match.url_name == 'price_list_create' or request.resolver_match.url_name == 'price_list_edit' or request.resolver_match.url_name == 'price_list_rotate' %}aria-current="page"{% endif %}>Listini</a>
                 <a href="{% url 'bom_list' %}" {% if request.resolver_match.url_name == 'bom_list' or request.resolver_match.url_name == 'bom_create' or request.resolver_match.url_name == 'bom_edit' %}aria-current="page"{% endif %}>Distinte base</a>
                 {% endif %}
-                <a href="{% url 'inventory' %}" {% if request.resolver_match.url_name == 'inventory' or request.resolver_match.url_name == 'part_create' %}aria-current="page"{% endif %}>{% translate "Parts catalog" %}</a>
+                <a href="{% url 'inventory' %}" {% if request.resolver_match.url_name == 'inventory' or request.resolver_match.url_name == 'part_create' %}aria-current="page"{% endif %}>Magazzino</a>
                 <a href="{% url 'purchase_order_list' %}" {% if request.resolver_match.url_name == 'purchase_order_list' or request.resolver_match.url_name == 'purchase_order_detail' or request.resolver_match.url_name == 'purchase_order_receive' %}aria-current="page"{% endif %}>Ordini fornitori</a>
                 <a href="{% url 'supplier_price_list_list' %}" {% if request.resolver_match.url_name == 'supplier_price_list_list' or request.resolver_match.url_name == 'supplier_price_list_import' %}aria-current="page"{% endif %}>Listini fornitori</a>
             </details>{% endif %}
@@ -212,7 +213,7 @@
     </aside>
     <button class="menu-backdrop" type="button" aria-label="{% translate 'Close menu' %}"></button>
     {% endif %}
-    <div class="workspace"><main id="page-content" tabindex="-1" aria-live="polite">{% if user.is_authenticated and request.resolver_match.url_name != 'home' %}<div class="global-back-row" data-back-row><a class="button-link global-back" href="{% url 'my_jobs' %}" data-back-button><span aria-hidden="true">←</span>{% if LANGUAGE_CODE == 'it' %}Indietro{% elif LANGUAGE_CODE == 'es' %}Volver{% else %}{% translate "Back" %}{% endif %}</a></div>{% endif %}{% if messages %}<ul class="messages">{% for message in messages %}<li>{{ message }}</li>{% endfor %}</ul>{% endif %}{% block content %}{% endblock %}</main><footer>RVKeeper - {% translate "Camper Maintenance Management" %}</footer></div>
+    <div class="workspace"><main id="page-content" tabindex="-1" aria-live="polite">{% if back_url %}<div class="global-back-row" data-back-row><a class="button-link global-back" href="{{ back_url }}" data-back-button><span aria-hidden="true">←</span>{% if LANGUAGE_CODE == 'it' %}Indietro{% elif LANGUAGE_CODE == 'es' %}Volver{% else %}{% translate "Back" %}{% endif %}</a></div>{% endif %}{% if messages %}<ul class="messages">{% for message in messages %}<li>{{ message }}</li>{% endfor %}</ul>{% endif %}{% block content %}{% endblock %}</main><footer>RVKeeper - {% translate "Camper Maintenance Management" %}</footer></div>
 </div>
 {% if user.is_authenticated %}
 <div class="notification-toast-stack"

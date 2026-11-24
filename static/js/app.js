@@ -1,12 +1,6 @@
 (() => {
     const desktop = window.matchMedia('(min-width: 761px)');
     const path = window.location.pathname;
-    const sameOriginReferrer = (() => {
-        try { return Boolean(document.referrer) && new URL(document.referrer).origin === window.location.origin; }
-        catch { return false; }
-    })();
-    const canGoBack = () => window.history.length > 1 &&
-        (sameOriginReferrer || window.history.state?.rvkeeperCanGoBack === true);
     const updateBackButton = (root = document) => {
         const backRow = root.querySelector('[data-back-row]');
         if (backRow) backRow.hidden = false;
@@ -16,11 +10,7 @@
         const backLink = event.target.closest('[data-back-button]');
         if (!backLink || event.defaultPrevented || event.button !== 0 || event.metaKey || event.ctrlKey || event.shiftKey || event.altKey) return;
         event.preventDefault();
-        if (canGoBack()) {
-            window.history.back();
-        } else {
-            window.location.assign(backLink.href);
-        }
+        window.location.assign(backLink.href);
     });
     document.addEventListener('click', (event) => {
         const addButton = event.target.closest('[data-formset-add]');

@@ -1,4 +1,5 @@
 from django import forms
+from django.utils import timezone
 
 from clientandsuppliers.models import CamperOwner
 from django.forms import inlineformset_factory
@@ -57,9 +58,15 @@ class PurchaseOrderForm(forms.ModelForm):
     class Meta:
         model = PurchaseOrder
         fields = ("supplier", "order_date", "notes")
+        widgets = {
+            "order_date": forms.DateInput(attrs={"type": "date"}),
+        }
 
     def __init__(self, *args, workshop, **kwargs):
         super().__init__(*args, **kwargs)
+        self.fields["order_date"].required = True
+        if not self.is_bound and not self.instance.pk:
+            self.initial.setdefault("order_date", timezone.localdate())
         self.fields["supplier"].queryset = CamperOwner.objects.filter(
             workshop=workshop,
             kind__in=("supplier", "both"),
@@ -83,6 +90,9 @@ class PurchaseOrderLineForm(forms.ModelForm):
             "part_number",
             "name",
         )
+        self.fields["quantity_required"].initial = 1
+        self.fields["quantity_ordered"].initial = 1
+        self.fields["unit_price"].required = True
 
 
 PurchaseOrderLineFormSet = inlineformset_factory(

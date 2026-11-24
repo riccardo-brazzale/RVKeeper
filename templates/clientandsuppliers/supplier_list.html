@@ -1,0 +1,38 @@
+{% extends "base.html" %}
+{% load i18n %}
+{% block title %}Fornitori · RVKeeper{% endblock %}
+{% block content %}
+<div class="page-heading">
+    <div><h2>Fornitori</h2><p>Anagrafica fornitori e acquisti associati.</p></div>
+    <a class="button-link" href="{% url 'customer_create' %}?kind=supplier">Nuovo fornitore</a>
+</div>
+<section class="panel">
+    <form method="get" class="actions" style="margin-bottom:16px">
+        <input type="search" name="q" value="{{ query }}" placeholder="Codice, nome, telefono o email">
+        <button type="submit">Cerca</button>
+    </form>
+    {% if contacts %}
+    <div class="table-wrap"><table>
+        <thead><tr><th>Codice</th><th>Fornitore</th><th>Telefono</th><th>Email</th><th>Città</th><th>Tipo</th></tr></thead>
+        <tbody>
+        {% for contact in contacts %}
+        <tr>
+            <td><a href="{% url 'customer_detail' pk=contact.pk %}">{{ contact.supplier_code }}</a></td>
+            <td><a href="{% url 'customer_detail' pk=contact.pk %}">{{ contact }}</a></td>
+            <td>{{ contact.phone|default:"—" }}</td><td>{{ contact.email|default:"—" }}</td><td>{{ contact.city|default:"—" }}</td><td>{{ contact.get_kind_display }}</td>
+        </tr>
+        {% endfor %}
+        </tbody>
+    </table></div>
+    {% else %}
+    <p>Nessun fornitore trovato.</p>
+    {% endif %}
+    {% if page_obj.paginator.num_pages > 1 %}
+    <nav class="pagination" aria-label="Paginazione fornitori">
+        {% if page_obj.has_previous %}<a href="?page={{ page_obj.previous_page_number }}{% if query %}&q={{ query|urlencode }}{% endif %}">Precedente</a>{% endif %}
+        <span>Pagina {{ page_obj.number }} di {{ page_obj.paginator.num_pages }}</span>
+        {% if page_obj.has_next %}<a href="?page={{ page_obj.next_page_number }}{% if query %}&q={{ query|urlencode }}{% endif %}">Successiva</a>{% endif %}
+    </nav>
+    {% endif %}
+</section>
+{% endblock %}

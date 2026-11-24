@@ -1,5 +1,6 @@
 from django.core.exceptions import ValidationError
 from django.db import models
+from django.utils import timezone
 from django.utils.translation import gettext_lazy as _
 
 
@@ -505,6 +506,11 @@ class SupplierPriceListItem(models.Model):
         Part, on_delete=models.SET_NULL, null=True, blank=True, related_name="supplier_price_list_items",
     )
     unit_price = models.DecimalField(max_digits=12, decimal_places=2, verbose_name="Prezzo unitario")
+    valid_from = models.DateField(default=timezone.localdate, verbose_name="Prezzo corrente valido dal")
+    previous_price = models.DecimalField(max_digits=12, decimal_places=2, null=True, blank=True, verbose_name="Prezzo precedente")
+    previous_valid_from = models.DateField(null=True, blank=True, verbose_name="Precedente valido dal")
+    future_price = models.DecimalField(max_digits=12, decimal_places=2, null=True, blank=True, verbose_name="Prezzo futuro")
+    future_valid_from = models.DateField(null=True, blank=True, verbose_name="Futuro valido dal")
     discount_percent = models.DecimalField(max_digits=5, decimal_places=2, default=0, verbose_name="Sconto (%)")
 
     class Meta:

@@ -1,0 +1,36 @@
+{% extends "base.html" %}
+{% load i18n %}
+{% block title %}Aggiungi prezzo fornitore{% endblock %}
+{% block content %}
+<div class="page-heading">
+    <div><h2>Aggiungi prezzo fornitore · {{ price_list.code }}</h2><p>{{ price_list.supplier }}</p></div>
+    <a class="button-link" href="{% url 'supplier_price_list_grid' pk=price_list.pk %}">Prezzi</a>
+</div>
+<section class="panel">
+    <form method="get" class="actions" style="margin-bottom:16px">
+        <input type="search" name="q" value="{{ search }}" placeholder="Codice o nome articolo">
+        <button type="submit">Cerca</button>
+    </form>
+    <form method="post">
+        {% csrf_token %}
+        <div class="table-wrap">
+            <table>
+                <thead><tr><th></th><th>Codice articolo interno</th><th>Descrizione</th><th>UM</th></tr></thead>
+                <tbody>
+                    {% for part in parts %}
+                    <tr><td><input type="radio" name="part" value="{{ part.pk }}" required></td><td>{{ part.part_number }}</td><td>{{ part.name }}</td><td>{{ part.unit }}</td></tr>
+                    {% empty %}
+                    <tr><td colspan="4">Nessun articolo trovato.</td></tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+        </div>
+        <div class="form-grid" style="margin-top:18px">
+            <div class="form-field"><label for="supplier_article_code">Codice articolo fornitore</label><input id="supplier_article_code" name="supplier_article_code" maxlength="100" required></div>
+            <div class="form-field"><label for="current_price">Prezzo corrente</label><input id="current_price" name="current_price" type="number" min="0" step="0.01" required></div>
+            <div class="form-field"><label for="future_price">Prezzo futuro</label><input id="future_price" name="future_price" type="number" min="0" step="0.01"></div>
+        </div>
+        <button type="submit">Aggiungi prezzo</button>
+    </form>
+</section>
+{% endblock %}

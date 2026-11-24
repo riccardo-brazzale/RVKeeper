@@ -1,6 +1,7 @@
 from django.contrib import messages
 from django.contrib.auth.decorators import login_required
 from django.db import models
+from django.core.paginator import Paginator
 from django.http import HttpResponseForbidden
 from django.shortcuts import get_object_or_404, redirect, render
 from django.utils.translation import gettext_lazy as _
@@ -19,6 +20,60 @@ def _active_workshop(user):
 
 def _can_manage_contacts(user):
     return getattr(user, "profile", "") == "admin" or user.is_superuser
+
+
+@login_required
+def customer_list(request):
+    if not _can_manage_contacts(request.user):
+        return HttpResponseForbidden(_("Customer records are restricted to management roles."))
+    workshop = _active_workshop(request.user)
+    contacts = CamperOwner.objects.filter(
+        workshop=workshop,
+        kind__in=("customer", "both"),
+    ).annotate(camper_count=models.Count("campers", distinct=True))
+    query = request.GET.get("q", "").strip()
+    if query:
+        contacts = contacts.filter(
+            models.Q(company_name__icontains=query)
+            | models.Q(first_name__icontains=query)
+            | models.Q(last_name__icontains=query)
+            | models.Q(phone__icontains=query)
+            | models.Q(email__icontains=query)
+            | models.Q(vat_number__icontains=query)
+        )
+    return render(request, "clientandsuppliers/customer_list.html", {
+        "contacts": Paginator(contacts.order_by("last_name", "first_name", "company_name", "pk"), 50).get_page(request.GET.get("page")),
+        "page_obj": Paginator(contacts.order_by("last_name", "first_name", "company_name", "pk"), 50).get_page(request.GET.get("page")),
+        "has_workshop": workshop is not None,
+        "query": query,
+    })
+
+
+@login_required
+def supplier_list(request):
+    if not _can_manage_contacts(request.user):
+        return HttpResponseForbidden(_("Supplier records are restricted to management roles."))
+    workshop = _active_workshop(request.user)
+    contacts = CamperOwner.objects.filter(
+        workshop=workshop,
+        kind__in=("supplier", "both"),
+    )
+    query = request.GET.get("q", "").strip()
+    if query:
+        contacts = contacts.filter(
+            models.Q(company_name__icontains=query)
+            | models.Q(first_name__icontains=query)
+            | models.Q(last_name__icontains=query)
+            | models.Q(phone__icontains=query)
+            | models.Q(email__icontains=query)
+            | models.Q(vat_number__icontains=query)
+        )
+    return render(request, "clientandsuppliers/supplier_list.html", {
+        "contacts": Paginator(contacts.order_by("last_name", "first_name", "company_name", "pk"), 50).get_page(request.GET.get("page")),
+        "page_obj": Paginator(contacts.order_by("last_name", "first_name", "company_name", "pk"), 50).get_page(request.GET.get("page")),
+        "has_workshop": workshop is not None,
+        "query": query,
+    })
 
 
 @login_required
@@ -50,7 +105,14 @@ def contact_create(request):
     if workshop is None:
         messages.error(request, _("Your account is not associated with an active workshop."))
         return redirect("customers")
-    form = ClientSupplierForm(request.POST or None, workshop=workshop)
+    initial = {}
+    if request.GET.get("kind") in ("customer", "supplier"):
+        initial["kind"] = request.GET["kind"]
+    form = ClientSupplierForm(
+        request.POST or None,
+        initial=initial,
+        workshop=workshop,
+    )
     if request.method == "POST" and form.is_valid():
         contact = form.save(commit=False)
         contact.workshop = workshop

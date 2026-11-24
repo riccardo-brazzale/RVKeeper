@@ -11,7 +11,7 @@ from django.contrib.auth.decorators import login_required
 from django.core.exceptions import ValidationError
 from django.core.paginator import Paginator
 from django.db import models, transaction
-from django.http import Http404, HttpResponse, HttpResponseForbidden, HttpResponseNotAllowed
+from django.http import Http404, HttpResponse, HttpResponseForbidden, HttpResponseNotAllowed, JsonResponse
 from django.shortcuts import get_object_or_404, redirect, render
 from django.utils import timezone
 from django.utils.translation import gettext_lazy as _
@@ -355,6 +355,23 @@ def purchase_order_create(request):
             lines = line_formset.save(commit=False)
             for line in lines:
                 line.quantity_received = 0
+                if line.quantity_ordered is None:
+                    line.quantity_ordered = line.quantity_required
+                if line.unit_price is None:
+                    list_item = supplier_price_for_date(
+                        line.part,
+                        order.supplier,
+                        order.order_date,
+                    )
+                    offer = line.part.supplier_offers.filter(
+                        supplier=order.supplier,
+                    ).first()
+                    if list_item:
+                        line.unit_price = list_item.unit_price
+                        line.discount_percent = list_item.discount_percent
+                    elif offer:
+                        line.unit_price = offer.net_purchase_price
+                        line.discount_percent = offer.discount_percent
                 line.save()
             for deleted in line_formset.deleted_objects:
                 deleted.delete()
@@ -568,6 +585,151 @@ def supplier_price_list_list(request):
     })
 
 
+@login_required
+def supplier_price_list_detail(request, pk):
+    if denied := _deny_purchasing_access(request):
+        return denied
+    workshop = _workshop_or_redirect(request)
+    if workshop is None:
+        return redirect("home")
+    price_list = get_object_or_404(
+        SupplierPriceList.objects.select_related("supplier"),
+        pk=pk,
+        workshop=workshop,
+    )
+    if request.method == "POST":
+        valid_from = request.POST.get("valid_from", "").strip()
+        valid_to = request.POST.get("valid_to", "").strip()
+        try:
+            price_list.valid_from = date.fromisoformat(valid_from)
+            price_list.valid_to = date.fromisoformat(valid_to) if valid_to else None
+        except (TypeError, ValueError):
+            messages.error(request, "Inserisci date di validità valide.")
+            return redirect("supplier_price_list_detail", pk=price_list.pk)
+        if price_list.valid_to and price_list.valid_to < price_list.valid_from:
+            messages.error(request, "La data futura non può precedere quella attuale.")
+            return redirect("supplier_price_list_detail", pk=price_list.pk)
+        price_list.is_active = request.POST.get("is_active") == "on"
+        price_list.save(update_fields=("valid_from", "valid_to", "is_active"))
+        messages.success(request, "Testata listino fornitore salvata.")
+        return redirect("supplier_price_list_detail", pk=price_list.pk)
+    return render(request, "parts/supplier_price_list_detail.html", {
+        "price_list": price_list,
+    })
+
+
+@login_required
+def supplier_price_list_grid(request, pk):
+    if denied := _deny_purchasing_access(request):
+        return denied
+    workshop = _workshop_or_redirect(request)
+    if workshop is None:
+        return redirect("home")
+    price_list = get_object_or_404(SupplierPriceList, pk=pk, workshop=workshop)
+    search = request.GET.get("q", "").strip()
+    items = SupplierPriceListItem.objects.filter(
+        price_list=price_list,
+        part__isnull=False,
+    ).select_related("part").order_by("part__part_number", "pk")
+    if search:
+        items = items.filter(
+            models.Q(part__part_number__icontains=search)
+            | models.Q(part__name__icontains=search)
+            | models.Q(supplier_article_code__icontains=search)
+            | models.Q(internal_article_code__icontains=search)
+        )
+    if request.method == "POST":
+        changed_count = 0
+        for item in items:
+            current = request.POST.get(f"current_{item.pk}", "").strip().replace(",", ".")
+            future = request.POST.get(f"future_{item.pk}", "").strip().replace(",", ".")
+            try:
+                item.unit_price = Decimal(current) if current else item.unit_price
+                item.future_price = Decimal(future) if future else None
+            except (InvalidOperation, TypeError):
+                continue
+            if item.unit_price < 0 or (item.future_price is not None and item.future_price < 0):
+                continue
+            item.valid_from = price_list.valid_from
+            item.future_valid_from = price_list.valid_to
+            item.save(update_fields=("unit_price", "valid_from", "future_price", "future_valid_from"))
+            changed_count += 1
+        if changed_count:
+            messages.success(request, f"Aggiornate {changed_count} righe prezzo.")
+        return redirect("supplier_price_list_grid", pk=price_list.pk)
+    page = Paginator(items, 50).get_page(request.GET.get("page"))
+    return render(request, "parts/supplier_price_list_grid.html", {
+        "price_list": price_list,
+        "items": page,
+        "page_obj": page,
+        "search": search,
+    })
+
+
+@login_required
+def supplier_price_list_add_item(request, pk):
+    if denied := _deny_purchasing_access(request):
+        return denied
+    workshop = _workshop_or_redirect(request)
+    if workshop is None:
+        return redirect("home")
+    price_list = get_object_or_404(SupplierPriceList, pk=pk, workshop=workshop)
+    search = request.GET.get("q", "").strip()
+    parts = Part.objects.filter(workshop=workshop).order_by("part_number", "name")
+    if search:
+        parts = parts.filter(
+            models.Q(part_number__icontains=search)
+            | models.Q(name__icontains=search)
+            | models.Q(description__icontains=search)
+        )
+    page = Paginator(parts, 50).get_page(request.GET.get("page"))
+    if request.method == "POST":
+        try:
+            part = Part.objects.get(pk=request.POST.get("part"), workshop=workshop)
+        except (Part.DoesNotExist, TypeError, ValueError):
+            messages.error(request, "Seleziona un articolo valido.")
+            return redirect("supplier_price_list_add_item", pk=price_list.pk)
+        supplier_code = request.POST.get("supplier_article_code", "").strip()
+        current_raw = request.POST.get("current_price", "").strip().replace(",", ".")
+        future_raw = request.POST.get("future_price", "").strip().replace(",", ".")
+        if not supplier_code:
+            messages.error(request, "Il codice articolo fornitore è obbligatorio.")
+            return redirect("supplier_price_list_add_item", pk=price_list.pk)
+        if not current_raw:
+            messages.error(request, "Il prezzo corrente è obbligatorio.")
+            return redirect("supplier_price_list_add_item", pk=price_list.pk)
+        try:
+            current_price = Decimal(current_raw)
+            future_price = Decimal(future_raw) if future_raw else None
+        except (InvalidOperation, TypeError, ValueError):
+            messages.error(request, "Inserisci prezzi numerici validi.")
+            return redirect("supplier_price_list_add_item", pk=price_list.pk)
+        if current_price < 0 or (future_price is not None and future_price < 0):
+            messages.error(request, "I prezzi non possono essere negativi.")
+            return redirect("supplier_price_list_add_item", pk=price_list.pk)
+        if SupplierPriceListItem.objects.filter(price_list=price_list, part=part).exists():
+            messages.error(request, "Esiste già una riga prezzo per questo articolo.")
+            return redirect("supplier_price_list_grid", pk=price_list.pk)
+        SupplierPriceListItem.objects.create(
+            price_list=price_list,
+            supplier_article_code=supplier_code,
+            internal_article_code=part.part_number,
+            part=part,
+            unit_price=current_price,
+            valid_from=price_list.valid_from,
+            future_price=future_price,
+            future_valid_from=price_list.valid_to,
+        )
+        messages.success(request, "Prezzo fornitore aggiunto.")
+        return redirect("supplier_price_list_grid", pk=price_list.pk)
+    return render(request, "parts/supplier_price_list_add_item.html", {
+        "price_list": price_list,
+        "parts": page,
+        "page_obj": page,
+        "search": search,
+    })
+
+
 def _read_supplier_price_rows(upload):
     extension = os.path.splitext(upload.name)[1].lower()
     if extension == ".xlsx":
@@ -609,8 +771,8 @@ def supplier_price_list_import(request):
     imported_count = 0
     if request.method == "POST":
         supplier = suppliers.filter(pk=request.POST.get("supplier")).first()
-        code = request.POST.get("code", "").strip()
-        name = request.POST.get("name", "").strip()
+        code = supplier.supplier_code if supplier else ""
+        name = f"Listino {supplier}" if supplier else ""
         upload = request.FILES.get("file")
         try:
             valid_from = date.fromisoformat(request.POST.get("valid_from", ""))

@@ -1,0 +1,25 @@
+{% extends "base.html" %}
+{% load i18n %}
+{% block title %}Listino fornitore · {{ price_list.code }}{% endblock %}
+{% block content %}
+<div class="page-heading">
+    <div><h2>Testata listino fornitore · {{ price_list.code }}</h2><p>{{ price_list.supplier }}</p></div>
+    <div class="actions">
+        <a class="button-link" href="{% url 'supplier_price_list_grid' pk=price_list.pk %}">Prezzi</a>
+        <a class="button-link" href="{% url 'supplier_price_list_list' %}">Elenco listini fornitori</a>
+    </div>
+</div>
+<section class="panel">
+    <form method="post">
+        {% csrf_token %}
+        <div class="form-grid">
+            <div class="form-field"><label>Fornitore</label><input value="{{ price_list.supplier }}" readonly></div>
+            <div class="form-field"><label>Codice listino</label><input value="{{ price_list.code }}" readonly></div>
+            <div class="form-field"><label for="valid_from">Data validità attuale</label><input id="valid_from" name="valid_from" type="date" value="{{ price_list.valid_from|date:'Y-m-d' }}" required></div>
+            <div class="form-field"><label for="valid_to">Data validità futura</label><input id="valid_to" name="valid_to" type="date" value="{{ price_list.valid_to|date:'Y-m-d' }}"></div>
+            <div class="form-field"><label for="is_active">Attivo</label><input id="is_active" name="is_active" type="checkbox" {% if price_list.is_active %}checked{% endif %}></div>
+        </div>
+        <button type="submit">Salva testata</button>
+    </form>
+</section>
+{% endblock %}

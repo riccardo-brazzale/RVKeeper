@@ -1,6 +1,7 @@
 {% extends "base.html" %}
 {% load i18n %}
 {% block title %}Nuovo ordine fornitore · RVKeeper{% endblock %}
+{% block extra_js %}{% endblock %}
 {% block content %}
 <div class="page-heading"><div><h2>Nuovo ordine fornitore</h2></div></div>
 <section class="panel">
@@ -30,4 +31,13 @@
         <button type="submit">Crea ordine fornitore</button>
     </form>
 </section>
+<script>
+document.addEventListener("input", (event) => {
+    const required = event.target.closest('[name$="-quantity_required"]');
+    if (!required) return;
+    const orderedName = required.name.replace("-quantity_required", "-quantity_ordered");
+    const ordered = document.querySelector(`[name="${orderedName}"]`);
+    if (ordered) ordered.value = required.value;
+});
+</script>
 {% endblock %}
