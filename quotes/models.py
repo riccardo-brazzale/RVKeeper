@@ -55,6 +55,7 @@ class QuoteLine(models.Model):
     quote = models.ForeignKey(Quote, on_delete=models.CASCADE, related_name="lines")
     line_type = models.CharField(max_length=10, choices=TYPES, default="labor", verbose_name="Tipo riga")
     part = models.ForeignKey("parts.Part", on_delete=models.SET_NULL, null=True, blank=True, related_name="quote_lines")
+    labor_article = models.ForeignKey("orders.LaborArticle", on_delete=models.SET_NULL, null=True, blank=True, related_name="quote_lines")
     description = models.CharField(max_length=250, verbose_name="Descrizione")
     quantity = models.DecimalField(max_digits=10, decimal_places=2, default=1)
     unit = models.CharField(max_length=30, default="pz")
@@ -77,6 +78,8 @@ class QuoteLine(models.Model):
             raise ValidationError({"discount_percent": "Lo sconto deve essere compreso tra 0 e 100%."})
         if self.part_id and self.quote_id and self.quote.workshop_id != self.part.workshop_id:
             raise ValidationError({"part": "Il ricambio deve appartenere alla stessa officina del preventivo."})
+        if self.labor_article_id and self.quote_id and self.quote.workshop_id != self.labor_article.workshop_id:
+            raise ValidationError({"labor_article": "L'articolo manodopera deve appartenere alla stessa officina del preventivo."})
 
     @property
     def subtotal(self):

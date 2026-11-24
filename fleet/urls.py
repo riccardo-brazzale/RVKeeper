@@ -1,5 +1,6 @@
 from django.urls import path
 
+from parts.views import part_movement
 from . import views
 
 app_name = "fleet"
@@ -9,7 +10,7 @@ urlpatterns = [
     path("veicolo/<int:pk>/modifica/", views.camper_edit, name="camper_edit"),
     path("veicolo/<int:pk>/foto/", views.camper_photo_upload, name="camper_photo_upload"),
     path("veicolo/<int:pk>/foto/<int:photo_pk>/rimuovi/", views.camper_photo_delete, name="camper_photo_delete"),
-    path("ricambio/<int:pk>/movimenti/", views.part_movement, name="part_movement"),
+    path("ricambio/<int:pk>/movimenti/", part_movement, name="part_movement"),
     path("", views.camper_list, name="camper_list"),
     path("nuovo/", views.camper_create, name="camper_create"),
     path("<str:module>/", views.workflow_list, name="workflow_list"),

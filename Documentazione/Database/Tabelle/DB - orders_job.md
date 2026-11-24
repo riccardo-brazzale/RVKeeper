@@ -22,11 +22,13 @@ tags:
 | `work_order_id` | `work_order` | `ForeignKey` | NOT NULL -> [[DB - orders_workorder]] |
 | `job_number` | `job_number` | `PositiveIntegerField` | NOT NULL |
 | `title` | `title` | `CharField` | NOT NULL |
+| `labor_article_id` | `labor_article` | `ForeignKey` | NULL, blank -> `orders_laborarticle` |
 | `description` | `description` | `TextField` | blank |
 | `category` | `category` | `CharField` | NOT NULL; valori: Customer Pay, Warranty, Stock |
 | `department` | `department` | `CharField` | NOT NULL; valori: Technician, Details |
 | `specialty` | `specialty` | `CharField` | NOT NULL; valori: Interior, Engine, Body, General, Detailing |
 | `status` | `status` | `CharField` | NOT NULL; valori: Not Started, In Progress, Paused, Waiting Parts, Waiting Warranty, Completed, Cancelled |
+| `invoice_hourly_rate_override` | `invoice_hourly_rate_override` | `DecimalField` | NULL, blank; tariffa oraria personalizzata per la riga di fatturazione |
 | `reception_notes` | `reception_notes` | `TextField` | blank |
 | `standard_minutes` | `standard_minutes` | `PositiveIntegerField` | NOT NULL |
 | `block_reason` | `block_reason` | `TextField` | blank |
@@ -45,17 +47,18 @@ tags:
 |---|---|---|
 | `workshop` | [[DB - workshops_workshop]] | `CASCADE` |
 | `work_order` | [[DB - orders_workorder]] | `CASCADE` |
+| `labor_article` | `orders_laborarticle` | `PROTECT` |
 
 ## Riferimenti in ingresso
 
-- [[DB - fleet_partsrequest]]. Campo `job_id` (attributo `job`).
-- [[DB - fleet_warrantyclaim]]. Campo `job_id` (attributo `job`).
-- [[DB - fleet_warrantyreturn]]. Campo `job_id` (attributo `job`).
-- [[DB - fleet_jobnote]]. Campo `job_id` (attributo `job`).
-- [[DB - fleet_attachment]]. Campo `job_id` (attributo `job`).
-- [[DB - fleet_timeevent]]. Campo `job_id` (attributo `job`).
-- [[DB - fleet_jobassignment]]. Campo `job_id` (attributo `job`).
-- [[DB - fleet_jobparticipation]]. Campo `job_id` (attributo `job`).
+- [[DB - parts_partsrequest]]. Campo `job_id` (attributo `job`).
+- [[DB - orders_warrantyclaim]]. Campo `job_id` (attributo `job`).
+- [[DB - orders_warrantyreturn]]. Campo `job_id` (attributo `job`).
+- [[DB - orders_jobnote]]. Campo `job_id` (attributo `job`).
+- [[DB - orders_attachment]]. Campo `job_id` (attributo `job`).
+- [[DB - orders_timeevent]]. Campo `job_id` (attributo `job`).
+- [[DB - orders_jobassignment]]. Campo `job_id` (attributo `job`).
+- [[DB - orders_jobparticipation]]. Campo `job_id` (attributo `job`).
 - [[DB - orders_jobcall]]. Campo `job_id` (attributo `job`).
 
 ## Navigazione

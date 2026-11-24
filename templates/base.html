@@ -82,10 +82,14 @@
         footer { text-align: center; padding: 16px; color: white; text-shadow: 0 1px 3px #000; }
         .menu-backdrop { display: none; }
         @media (max-width: 760px) {
-            .app-header { min-height: 60px; padding: 12px 16px; }
+            .app-header { min-height: 60px; padding: 8px 10px; display: grid; grid-template-columns: auto minmax(0,1fr) auto; }
             .app-header h1 { font-size: 21px; }
             .menu-toggle { display: inline-flex; align-items: center; gap: 8px; }
-            .brand img { height: 168px; max-width: min(480px,90vw); }
+            .brand { justify-self: center; min-width: 0; }
+            .brand img { height: 44px; max-width: 170px; }
+            .user-actions { gap: 6px; }
+            .user-actions > a { display: none; }
+            .app-header form button { white-space: nowrap; padding: 9px 10px; }
             .app-layout { min-height: calc(100vh - 60px); }
             .sidebar { position: fixed; z-index: 20; inset: 60px auto 0 0; width: min(360px,92vw); transform: translateX(-105%); transition: transform .2s ease; box-shadow: 8px 0 24px rgba(0,0,0,.22); }
             .sidebar.is-open { transform: translateX(0); }
@@ -97,15 +101,15 @@
         @media (max-width: 420px) {
             .app-header { gap: 8px; }
             .app-header h1 { font-size: 18px; }
-            .brand img { height: 144px; max-width: 84vw; }
+            .brand img { height: 38px; max-width: 120px; }
             .app-header form button { padding: 10px 12px; }
             .panel { padding: 20px; }
         }
         @media (max-width: 600px) { .form-grid { grid-template-columns: 1fr; } .form-grid .full-width { grid-column: auto; } }
         @media (prefers-reduced-motion: reduce) { *, *::before, *::after { scroll-behavior: auto !important; transition-duration: .01ms !important; } }
     </style>
-    <link rel="stylesheet" href="{% static 'css/app.css' %}?v=notifications-1">
-    <script src="{% static 'js/app.js' %}?v=notifications-1" defer></script>
+    <link rel="stylesheet" href="{% static 'css/app.css' %}?v=dashboard-links-1">
+    <script src="{% static 'js/app.js' %}?v=warehouse-actions-1" defer></script>
     <style>
         #primary-navigation { flex: 0 0 340px !important; width: 340px !important; }
         #primary-navigation nav > a.sidebar-dashboard {
@@ -152,21 +156,27 @@
     <aside class="sidebar" id="primary-navigation">
         <nav aria-label="{% translate 'Main navigation' %}">
             <a class="sidebar-dashboard" href="{% url 'home' %}" {% if request.resolver_match.url_name == 'home' %}aria-current="page"{% endif %}>{% translate "Dashboard" %}</a>
-            <details class="sidebar-group" {% if request.resolver_match.url_name == 'customers' or request.resolver_match.url_name == 'customer_create' or request.resolver_match.namespace == 'fleet' or request.resolver_match.url_name == 'inventory' or request.resolver_match.url_name == 'part_create' or request.resolver_match.url_name == 'labor_articles' or request.resolver_match.url_name == 'labor_article_create' or request.resolver_match.url_name == 'labor_article_edit' %}open{% endif %}>
+            {% if user.profile != 'mechanic' or user.is_superuser %}<details class="sidebar-group" {% if request.resolver_match.url_name == 'customers' or request.resolver_match.url_name == 'customer_create' or request.resolver_match.namespace == 'fleet' or request.resolver_match.url_name == 'inventory' or request.resolver_match.url_name == 'part_create' or request.resolver_match.url_name == 'price_lists' or request.resolver_match.url_name == 'price_list_create' or request.resolver_match.url_name == 'price_list_edit' or request.resolver_match.url_name == 'price_list_rotate' or request.resolver_match.url_name == 'purchase_order_list' or request.resolver_match.url_name == 'purchase_order_detail' or request.resolver_match.url_name == 'purchase_order_receive' or request.resolver_match.url_name == 'supplier_price_list_list' or request.resolver_match.url_name == 'supplier_price_list_import' %}open{% endif %}>
                 <summary class="sidebar-label">{% translate "Master data" %}</summary>
                 {% if user.profile == 'admin' %}
                 <a href="{% url 'customers' %}" {% if request.resolver_match.url_name == 'customers' or request.resolver_match.url_name == 'customer_create' %}aria-current="page"{% endif %}>{% translate "Customers and suppliers" %}</a>
                 <a href="{% url 'fleet:camper_list' %}" {% if request.resolver_match.namespace == 'fleet' %}aria-current="page"{% endif %}>{% translate "Fleet" %}</a>
-                <a href="{% url 'labor_articles' %}" {% if request.resolver_match.url_name == 'labor_articles' or request.resolver_match.url_name == 'labor_article_create' or request.resolver_match.url_name == 'labor_article_edit' %}aria-current="page"{% endif %}>{% translate "Labor articles" %}</a>
+                <a href="{% url 'price_lists' %}" {% if request.resolver_match.url_name == 'price_lists' or request.resolver_match.url_name == 'price_list_create' or request.resolver_match.url_name == 'price_list_edit' or request.resolver_match.url_name == 'price_list_rotate' %}aria-current="page"{% endif %}>Listini</a>
                 {% endif %}
                 <a href="{% url 'inventory' %}" {% if request.resolver_match.url_name == 'inventory' or request.resolver_match.url_name == 'part_create' %}aria-current="page"{% endif %}>{% translate "Parts catalog" %}</a>
-            </details>
-            {% if user.profile != 'warehouse' %}<details class="sidebar-group" {% if request.resolver_match.url_name == 'orders' or request.resolver_match.url_name == 'order_create' or request.resolver_match.url_name == 'work_order_detail' or request.resolver_match.url_name == 'order_status' or request.resolver_match.url_name == 'work_order_report' or request.resolver_match.url_name == 'quotes' or request.resolver_match.url_name == 'quote_create' or request.resolver_match.url_name == 'quote_detail' or request.resolver_match.url_name == 'quote_edit' %}open{% endif %}>
+                <a href="{% url 'purchase_order_list' %}" {% if request.resolver_match.url_name == 'purchase_order_list' or request.resolver_match.url_name == 'purchase_order_detail' or request.resolver_match.url_name == 'purchase_order_receive' %}aria-current="page"{% endif %}>Ordini fornitori</a>
+                <a href="{% url 'supplier_price_list_list' %}" {% if request.resolver_match.url_name == 'supplier_price_list_list' or request.resolver_match.url_name == 'supplier_price_list_import' %}aria-current="page"{% endif %}>Listini fornitori</a>
+            </details>{% endif %}
+            {% if user.profile != 'warehouse' and user.profile != 'mechanic' %}<details class="sidebar-group" {% if request.resolver_match.url_name == 'orders' or request.resolver_match.url_name == 'order_create' or request.resolver_match.url_name == 'work_order_detail' or request.resolver_match.url_name == 'order_status' or request.resolver_match.url_name == 'work_order_report' or request.resolver_match.url_name == 'work_order_billing' or request.resolver_match.url_name == 'quotes' or request.resolver_match.url_name == 'quote_create' or request.resolver_match.url_name == 'quote_detail' or request.resolver_match.url_name == 'quote_edit' %}open{% endif %}>
                 <summary class="sidebar-label">{% translate "Orders" %}</summary>
-                <a href="{% url 'orders' %}" {% if request.resolver_match.url_name == 'orders' or request.resolver_match.url_name == 'order_create' or request.resolver_match.url_name == 'work_order_detail' or request.resolver_match.url_name == 'order_status' or request.resolver_match.url_name == 'work_order_report' %}aria-current="page"{% endif %}>{% translate "Orders" %}</a>
+                <a href="{% url 'orders' %}" {% if request.resolver_match.url_name == 'orders' or request.resolver_match.url_name == 'order_create' or request.resolver_match.url_name == 'work_order_detail' or request.resolver_match.url_name == 'order_status' or request.resolver_match.url_name == 'work_order_report' or request.resolver_match.url_name == 'work_order_billing' %}aria-current="page"{% endif %}>{% translate "Orders" %}</a>
                 {% if user.profile != 'mechanic' %}<a href="{% url 'quotes' %}" {% if request.resolver_match.url_name == 'quotes' or request.resolver_match.url_name == 'quote_create' or request.resolver_match.url_name == 'quote_detail' or request.resolver_match.url_name == 'quote_edit' %}aria-current="page"{% endif %}>{% translate "Quotes" %}</a>{% endif %}
             </details>{% endif %}
-            <details class="sidebar-group" {% if request.resolver_match.url_name == 'my_jobs' or request.resolver_match.url_name == 'jobs' or request.resolver_match.url_name == 'job_create' or request.resolver_match.url_name == 'job_action' or request.resolver_match.url_name == 'job_parts_request' or request.resolver_match.url_name == 'job_complete' or request.resolver_match.url_name == 'parts_requests' or request.resolver_match.url_name == 'parts_request_create' or request.resolver_match.url_name == 'parts_request_status' or request.resolver_match.url_name == 'parts_request_action' or request.resolver_match.url_name == 'notes' or request.resolver_match.url_name == 'note_create' or request.resolver_match.url_name == 'assignments' or request.resolver_match.url_name == 'assignment_create' or request.resolver_match.url_name == 'attachments' or request.resolver_match.url_name == 'attachment_create' or request.resolver_match.url_name == 'notifications' %}open{% endif %}>
+            {% if user.profile == 'mechanic' %}<details class="sidebar-group" {% if request.resolver_match.url_name == 'my_jobs' or request.resolver_match.url_name == 'jobs' or request.resolver_match.url_name == 'job_create' or request.resolver_match.url_name == 'job_action' or request.resolver_match.url_name == 'job_parts_request' or request.resolver_match.url_name == 'job_complete' %}open{% endif %}>
+                <summary class="sidebar-label">{% translate "Workshop operations" %}</summary>
+                <a href="{% url 'my_jobs' %}" {% if request.resolver_match.url_name == 'my_jobs' %}aria-current="page"{% endif %}>{% translate "My jobs" %}</a>
+                <a href="{% url 'jobs' %}" {% if request.resolver_match.url_name == 'jobs' or request.resolver_match.url_name == 'job_create' %}aria-current="page"{% endif %}>{% translate "Workshop jobs" %}</a>
+            </details>{% else %}<details class="sidebar-group" {% if request.resolver_match.url_name == 'my_jobs' or request.resolver_match.url_name == 'jobs' or request.resolver_match.url_name == 'job_create' or request.resolver_match.url_name == 'job_action' or request.resolver_match.url_name == 'job_parts_request' or request.resolver_match.url_name == 'job_complete' or request.resolver_match.url_name == 'parts_requests' or request.resolver_match.url_name == 'parts_request_create' or request.resolver_match.url_name == 'parts_request_status' or request.resolver_match.url_name == 'parts_request_action' or request.resolver_match.url_name == 'notes' or request.resolver_match.url_name == 'note_create' or request.resolver_match.url_name == 'assignments' or request.resolver_match.url_name == 'assignment_create' or request.resolver_match.url_name == 'attachments' or request.resolver_match.url_name == 'attachment_create' or request.resolver_match.url_name == 'notifications' %}open{% endif %}>
                 <summary class="sidebar-label">{% translate "Workshop operations" %}</summary>
                 {% if user.profile != 'warehouse' %}<a href="{% url 'my_jobs' %}" {% if request.resolver_match.url_name == 'my_jobs' %}aria-current="page"{% endif %}>{% translate "My jobs" %}</a>
                 <a href="{% url 'jobs' %}" {% if request.resolver_match.url_name == 'jobs' or request.resolver_match.url_name == 'job_create' %}aria-current="page"{% endif %}>{% translate "Workshop jobs" %}</a>{% endif %}
@@ -180,7 +190,7 @@
                 <a href="{% url 'assignments' %}" {% if request.resolver_match.url_name == 'assignments' or request.resolver_match.url_name == 'assignment_create' %}aria-current="page"{% endif %}>{% translate "Technician assignments" %}</a>
                 <a href="{% url 'attachments' %}" {% if request.resolver_match.url_name == 'attachments' or request.resolver_match.url_name == 'attachment_create' %}aria-current="page"{% endif %}>{% translate "Attachments" %}</a>
                 {% endif %}
-            </details>
+            </details>{% endif %}
             {% if user.profile == 'admin' %}
             <details class="sidebar-group" {% if request.resolver_match.url_name == 'warranties' or request.resolver_match.url_name == 'warranty_create' or request.resolver_match.url_name == 'warranty_status' or request.resolver_match.url_name == 'returns' or request.resolver_match.url_name == 'return_create' or request.resolver_match.url_name == 'return_status' %}open{% endif %}>
                 <summary class="sidebar-label">{% translate "Warranties" %}</summary>
@@ -201,7 +211,7 @@
     </aside>
     <button class="menu-backdrop" type="button" aria-label="{% translate 'Close menu' %}"></button>
     {% endif %}
-    <div class="workspace"><main id="page-content" tabindex="-1" aria-live="polite">{% if user.is_authenticated and request.resolver_match.url_name != 'home' %}<div class="global-back-row" data-back-row hidden><a class="button-link global-back" href="{% url 'my_jobs' %}" data-back-button><span aria-hidden="true">←</span>{% if LANGUAGE_CODE == 'it' %}Indietro{% elif LANGUAGE_CODE == 'es' %}Volver{% else %}{% translate "Back" %}{% endif %}</a></div>{% endif %}{% if messages %}<ul class="messages">{% for message in messages %}<li>{{ message }}</li>{% endfor %}</ul>{% endif %}{% block content %}{% endblock %}</main><footer>RVKeeper - {% translate "Camper Maintenance Management" %}</footer></div>
+    <div class="workspace"><main id="page-content" tabindex="-1" aria-live="polite">{% if user.is_authenticated and request.resolver_match.url_name != 'home' %}<div class="global-back-row" data-back-row><a class="button-link global-back" href="{% url 'my_jobs' %}" data-back-button><span aria-hidden="true">←</span>{% if LANGUAGE_CODE == 'it' %}Indietro{% elif LANGUAGE_CODE == 'es' %}Volver{% else %}{% translate "Back" %}{% endif %}</a></div>{% endif %}{% if messages %}<ul class="messages">{% for message in messages %}<li>{{ message }}</li>{% endfor %}</ul>{% endif %}{% block content %}{% endblock %}</main><footer>RVKeeper - {% translate "Camper Maintenance Management" %}</footer></div>
 </div>
 {% if user.is_authenticated %}
 <div class="notification-toast-stack"

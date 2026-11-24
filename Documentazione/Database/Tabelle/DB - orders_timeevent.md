@@ -1,17 +1,17 @@
 ---
-title: "fleet_timeevent"
+title: "orders_timeevent"
 tags:
   - rvkeeper
   - database-table
-  - fleet
+  - orders
 ---
 
-# `fleet_timeevent`
+# `orders_timeevent`
 
-**Modello Django:** `fleet.TimeEvent`  
+**Modello Django:** `orders.TimeEvent`  
 **Descrizione:** time event  
-**App:** `fleet`  
-**Codice:** [fleet/models.py](../../../fleet/models.py)
+**App:** `orders`  
+**Codice:** [orders/models.py](../../../fleet/models.py)
 
 ## Colonne
 

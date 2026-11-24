@@ -9,15 +9,18 @@
         (sameOriginReferrer || window.history.state?.rvkeeperCanGoBack === true);
     const updateBackButton = (root = document) => {
         const backRow = root.querySelector('[data-back-row]');
-        if (backRow) backRow.hidden = !canGoBack();
+        if (backRow) backRow.hidden = false;
     };
     updateBackButton();
     document.addEventListener('click', (event) => {
         const backLink = event.target.closest('[data-back-button]');
         if (!backLink || event.defaultPrevented || event.button !== 0 || event.metaKey || event.ctrlKey || event.shiftKey || event.altKey) return;
-        if (!canGoBack()) return;
         event.preventDefault();
-        window.history.back();
+        if (canGoBack()) {
+            window.history.back();
+        } else {
+            window.location.assign(backLink.href);
+        }
     });
     document.addEventListener('click', (event) => {
         const addButton = event.target.closest('[data-formset-add]');

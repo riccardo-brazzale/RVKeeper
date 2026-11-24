@@ -1,17 +1,17 @@
 ---
-title: "fleet_jobparticipation"
+title: "orders_jobparticipation"
 tags:
   - rvkeeper
   - database-table
-  - fleet
+  - orders
 ---
 
-# `fleet_jobparticipation`
+# `orders_jobparticipation`
 
-**Modello Django:** `fleet.JobParticipation`  
+**Modello Django:** `orders.JobParticipation`  
 **Descrizione:** job participation  
-**App:** `fleet`  
-**Codice:** [fleet/models.py](../../../fleet/models.py)
+**App:** `orders`  
+**Codice:** [orders/models.py](../../../fleet/models.py)
 
 ## Colonne
 

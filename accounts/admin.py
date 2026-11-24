@@ -2,20 +2,52 @@
 from django.contrib import admin
 from django.contrib.auth.admin import UserAdmin
 from django.contrib.auth.models import Group
-from django.utils.translation import gettext_lazy as _
+from django.contrib.auth import logout
+from types import MethodType
 
-from .models import User
+from .models import AuthenticationSettings, User
 from .forms import CustomUserCreationForm, CustomUserChangeForm
 from workshops.models import Membership
 
 
+_admin_login = admin.site.login
+
+
+def _always_fresh_admin_login(self, request, extra_context=None):
+    if request.user.is_authenticated:
+        logout(request)
+    return _admin_login(request, extra_context)
+
+
+admin.site.login = MethodType(_always_fresh_admin_login, admin.site)
 admin.site.unregister(Group)
+
+
+@admin.register(AuthenticationSettings)
+class AuthenticationSettingsAdmin(admin.ModelAdmin):
+    fieldsets = (
+        ("Sicurezza sessione", {
+            "fields": ("idle_timeout_minutes", "session_duration_hours"),
+        }),
+    )
+
+    def has_add_permission(self, request):
+        return False
+
+    def has_delete_permission(self, request, obj=None):
+        return False
+
+    def changelist_view(self, request, extra_context=None):
+        from django.shortcuts import redirect
+        settings_object = AuthenticationSettings.get_solo()
+        return redirect(
+            "admin:accounts_authenticationsettings_change",
+            settings_object.pk,
+        )
 
 
 class MembershipInline(admin.TabularInline):
     model = Membership
-    verbose_name = _("Workshop membership")
-    verbose_name_plural = _("Workshop memberships")
     extra = 0
     fields = ("workshop", "is_active")
 
@@ -29,11 +61,6 @@ class CustomUserAdmin(UserAdmin):
     add_form = CustomUserCreationForm
     inlines = (MembershipInline,)
 
-    def save_model(self, request, obj, form, change):
-        # The profile determines access to the administration site.
-        obj.is_staff = obj.profile == "admin" or obj.is_superuser
-        super().save_model(request, obj, form, change)
-
     ordering = ("username",)
     list_display = (
         "username",
@@ -43,10 +70,12 @@ class CustomUserAdmin(UserAdmin):
         "preferred_language",
         "profile",
         "is_active",
+        "is_staff",
     )
 
     list_filter = (
         "is_active",
+        "is_staff",
         "preferred_language",
         "profile",
     )
@@ -62,7 +91,7 @@ class CustomUserAdmin(UserAdmin):
         (None, {
             "fields": ("username", "email", "password")
         }),
-        (_("Personal details and profile"), {
+        ("Informazioni personali", {
             "fields": (
                 "first_name",
                 "last_name",
@@ -70,13 +99,14 @@ class CustomUserAdmin(UserAdmin):
                 "profile",
             )
         }),
-        (_("Access"), {
+        ("Permissions", {
             "fields": (
                 "is_active",
+                "is_staff",
                 "is_superuser",
             )
         }),
-        (_("Dates"), {
+        ("Important Dates", {
             "fields": (
                 "last_login",
                 "date_joined",
@@ -95,6 +125,7 @@ class CustomUserAdmin(UserAdmin):
                 "password1",
                 "password2",
                 "is_active",
+                "is_staff",
                 "is_superuser",
             ),
         }),

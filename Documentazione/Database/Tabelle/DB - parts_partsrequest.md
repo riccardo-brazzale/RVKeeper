@@ -1,17 +1,17 @@
 ---
-title: "fleet_partsrequest"
+title: "parts_partsrequest"
 tags:
   - rvkeeper
   - database-table
-  - fleet
+  - parts
 ---
 
-# `fleet_partsrequest`
+# `parts_partsrequest`
 
-**Modello Django:** `fleet.PartsRequest`  
+**Modello Django:** `parts.PartsRequest`  
 **Descrizione:** parts request  
-**App:** `fleet`  
-**Codice:** [fleet/models.py](../../../fleet/models.py)
+**App:** `parts`  
+**Codice:** [parts/models.py](../../../fleet/models.py)
 
 ## Colonne
 
@@ -33,9 +33,10 @@ tags:
 | `notes` | `notes` | `TextField` | blank |
 | `supplier` | `supplier` | `CharField` | blank |
 | `purchase_price` | `purchase_price` | `DecimalField` | NULL, blank |
+| `invoice_unit_price_override` | `invoice_unit_price_override` | `DecimalField` | NULL, blank; prezzo unitario personalizzato per la fatturazione |
 | `order_number` | `order_number` | `CharField` | blank |
 | `status` | `status` | `CharField` | NOT NULL; valori: New, Pending, Preparing, Ready For Pickup, Delivered, Cancelled |
-| `warranty_claim_id` | `warranty_claim` | `ForeignKey` | NULL, blank -> [[DB - fleet_warrantyclaim]] |
+| `warranty_claim_id` | `warranty_claim` | `ForeignKey` | NULL, blank -> [[DB - orders_warrantyclaim]] |
 | `authorization` | `authorization` | `TextField` | blank |
 | `documents` | `documents` | `JSONField` | blank |
 | `defect_photos` | `defect_photos` | `JSONField` | blank |
@@ -56,15 +57,15 @@ tags:
 | `job` | [[DB - orders_job]] | `SET_NULL` |
 | `part` | [[DB - parts_part]] | `SET_NULL` |
 | `supplier_offer` | [[DB - parts_partsupplieroffer]] | `SET_NULL` |
-| `warranty_claim` | [[DB - fleet_warrantyclaim]] | `SET_NULL` |
+| `warranty_claim` | [[DB - orders_warrantyclaim]] | `SET_NULL` |
 | `requested_by` | [[DB - accounts_user]] | `SET_NULL` |
 | `delivered_by` | [[DB - accounts_user]] | `SET_NULL` |
 
 ## Riferimenti in ingresso
 
-- [[DB - fleet_warrantyreturn]]. Campo `parts_request_id` (attributo `parts_request`).
+- [[DB - orders_warrantyreturn]]. Campo `parts_request_id` (attributo `parts_request`).
 
 ## Navigazione
 
 - [[Database PostgreSQL RVKeeper]]
-- Tabelle collegate: [[DB - workshops_workshop]], [[DB - orders_workorder]], [[DB - orders_job]], [[DB - parts_part]], [[DB - parts_partsupplieroffer]], [[DB - fleet_warrantyclaim]], [[DB - accounts_user]], [[DB - accounts_user]]
+- Tabelle collegate: [[DB - workshops_workshop]], [[DB - orders_workorder]], [[DB - orders_job]], [[DB - parts_part]], [[DB - parts_partsupplieroffer]], [[DB - orders_warrantyclaim]], [[DB - accounts_user]], [[DB - accounts_user]]

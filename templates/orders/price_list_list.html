@@ -1,0 +1,33 @@
+{% extends "base.html" %}
+{% load i18n %}
+{% block title %}Listini · RVKeeper{% endblock %}
+{% block content %}
+<div class="page-heading">
+    <div><h2>Listini</h2><p>Listini Cliente e Officine, listini cliente con sconti e altri listini dell’officina.</p></div>
+    <a class="button-link" href="{% url 'price_list_create' %}">Nuovo listino cliente</a>
+</div>
+<section class="panel">
+    {% if not has_workshop %}
+        <p>{% translate "Your account is not associated with an active workshop." %}</p>
+    {% elif price_lists %}
+        <div class="table-wrap">
+            <table>
+                <thead><tr><th>Codice</th><th>Listino</th><th>Tipo</th><th>Cliente</th><th>Stato</th></tr></thead>
+                <tbody>
+                    {% for price_list in price_lists %}
+                        <tr>
+                            <td><a href="{% url 'price_list_edit' pk=price_list.pk %}">{{ price_list.code }}</a></td>
+                            <td>{{ price_list.name }}</td>
+                            <td>{% if price_list.is_default %}Listino Cliente{% elif price_list.is_workshop %}Listino Officine{% else %}Listino cliente{% endif %}</td>
+                            <td>{% if price_list.customer_id %}{{ price_list.customer.customer_code }} · {{ price_list.customer }}{% else %}—{% endif %}</td>
+                            <td>{% if price_list.is_active %}{% translate "Active" %}{% else %}{% translate "Inactive" %}{% endif %}</td>
+                        </tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+        </div>
+    {% else %}
+        <p>Nessun listino disponibile.</p>
+    {% endif %}
+</section>
+{% endblock %}

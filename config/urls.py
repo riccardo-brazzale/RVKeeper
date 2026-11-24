@@ -7,8 +7,10 @@ from django.conf.urls.static import static
 from django.urls import reverse_lazy
 
 from fleet import views as fleet_views
+from orders import views as orders_views
 from accounts import views as accounts_views
 from config import admin_ordering  # noqa: F401
+from accounts.forms import UsernameEmailPasswordResetForm
 
 admin.site.site_header = "RVKeeper Administration"
 admin.site.site_title = "RVKeeper Administration"
@@ -40,6 +42,7 @@ urlpatterns = [
             template_name="registration/password_reset_form.html",
             email_template_name="registration/password_reset_email.txt",
             subject_template_name="registration/password_reset_subject.txt",
+            form_class=UsernameEmailPasswordResetForm,
         ),
         name="password_reset",
     ),
@@ -72,29 +75,29 @@ urlpatterns = [
     path("lavori/", include("orders.jobs_urls")),
     path("preventivi/", include("quotes.urls")),
     path("magazzino/", include("parts.urls")),
-    path("richieste-ricambi/", fleet_views.workflow_list, {"module": "requests"}, name="parts_requests"),
-    path("richieste-ricambi/nuova/", fleet_views.workflow_create, {"module": "requests"}, name="parts_request_create"),
-    path("richieste-ricambi/<int:pk>/stato/", fleet_views.workflow_status_action, {"module": "requests"}, name="parts_request_status"),
-    path("richieste-ricambi/<int:pk>/<str:action>/", fleet_views.parts_request_action, name="parts_request_action"),
-    path("garanzie/", fleet_views.workflow_list, {"module": "claims"}, name="warranties"),
-    path("garanzie/nuova/", fleet_views.workflow_create, {"module": "claims"}, name="warranty_create"),
-    path("garanzie/<int:pk>/stato/", fleet_views.workflow_status_action, {"module": "claims"}, name="warranty_status"),
-    path("resi/", fleet_views.workflow_list, {"module": "returns"}, name="returns"),
-    path("resi/nuovo/", fleet_views.workflow_create, {"module": "returns"}, name="return_create"),
-    path("resi/<int:pk>/stato/", fleet_views.workflow_status_action, {"module": "returns"}, name="return_status"),
-    path("note/", fleet_views.workflow_list, {"module": "notes"}, name="notes"),
-    path("note/nuova/", fleet_views.workflow_create, {"module": "notes"}, name="note_create"),
-    path("assegnazioni/", fleet_views.workflow_list, {"module": "assignments"}, name="assignments"),
-    path("assegnazioni/nuova/", fleet_views.workflow_create, {"module": "assignments"}, name="assignment_create"),
-    path("allegati/", fleet_views.workflow_list, {"module": "attachments"}, name="attachments"),
-    path("allegati/nuovo/", fleet_views.workflow_create, {"module": "attachments"}, name="attachment_create"),
-    path("report/", fleet_views.report, name="report"),
-    path("notifiche/", fleet_views.notifications, name="notifications"),
-    path("notifiche/aggiornamenti/", fleet_views.notifications_feed, name="notifications_feed"),
-    path("notifiche/lette/", fleet_views.mark_notifications_read, name="notifications_read"),
-    path("registro-attivita/", fleet_views.audit_log, name="audit_log"),
-    path("esporta-dati/", fleet_views.data_export, name="data_export"),
-    path("flussi/<str:module>/<int:pk>/stato/", fleet_views.workflow_status_action, name="workflow_status_action"),
+    path("richieste-ricambi/", orders_views.workflow_list, {"module": "requests"}, name="parts_requests"),
+    path("richieste-ricambi/nuova/", orders_views.workflow_create, {"module": "requests"}, name="parts_request_create"),
+    path("richieste-ricambi/<int:pk>/stato/", orders_views.workflow_status_action, {"module": "requests"}, name="parts_request_status"),
+    path("richieste-ricambi/<int:pk>/<str:action>/", orders_views.parts_request_action, name="parts_request_action"),
+    path("garanzie/", orders_views.workflow_list, {"module": "claims"}, name="warranties"),
+    path("garanzie/nuova/", orders_views.workflow_create, {"module": "claims"}, name="warranty_create"),
+    path("garanzie/<int:pk>/stato/", orders_views.workflow_status_action, {"module": "claims"}, name="warranty_status"),
+    path("resi/", orders_views.workflow_list, {"module": "returns"}, name="returns"),
+    path("resi/nuovo/", orders_views.workflow_create, {"module": "returns"}, name="return_create"),
+    path("resi/<int:pk>/stato/", orders_views.workflow_status_action, {"module": "returns"}, name="return_status"),
+    path("note/", orders_views.workflow_list, {"module": "notes"}, name="notes"),
+    path("note/nuova/", orders_views.workflow_create, {"module": "notes"}, name="note_create"),
+    path("assegnazioni/", orders_views.workflow_list, {"module": "assignments"}, name="assignments"),
+    path("assegnazioni/nuova/", orders_views.workflow_create, {"module": "assignments"}, name="assignment_create"),
+    path("allegati/", orders_views.workflow_list, {"module": "attachments"}, name="attachments"),
+    path("allegati/nuovo/", orders_views.workflow_create, {"module": "attachments"}, name="attachment_create"),
+    path("report/", orders_views.report, name="report"),
+    path("notifiche/", orders_views.notifications, name="notifications"),
+    path("notifiche/aggiornamenti/", orders_views.notifications_feed, name="notifications_feed"),
+    path("notifiche/lette/", orders_views.mark_notifications_read, name="notifications_read"),
+    path("registro-attivita/", orders_views.audit_log, name="audit_log"),
+    path("esporta-dati/", orders_views.data_export, name="data_export"),
+    path("flussi/<str:module>/<int:pk>/stato/", orders_views.workflow_status_action, name="workflow_status_action"),
 
     path("admin/", admin.site.urls),
 ]

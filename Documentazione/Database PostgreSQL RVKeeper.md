@@ -131,7 +131,7 @@ Ogni tabella applicativa ha una nota dedicata con colonne, riferimenti, vincoli 
 - [[DB - clientandsuppliers_contactdocument]]
 - [[DB - fleet_camper]]
 - [[DB - fleet_camperphoto]]
-- [[DB - fleet_documentcategory]]
+- [[DB - orders_documentcategory]]
 
 ### Preventivi e ordini
 
@@ -141,10 +141,10 @@ Ogni tabella applicativa ha una nota dedicata con colonne, riferimenti, vincoli 
 - [[DB - orders_job]]
 - [[DB - orders_jobcall]]
 - [[DB - orders_pausereason]]
-- [[DB - fleet_jobparticipation]]
-- [[DB - fleet_timeevent]]
-- [[DB - fleet_jobassignment]]
-- [[DB - fleet_jobnote]]
+- [[DB - orders_jobparticipation]]
+- [[DB - orders_timeevent]]
+- [[DB - orders_jobassignment]]
+- [[DB - orders_jobnote]]
 
 ### Magazzino e fornitori
 
@@ -152,15 +152,18 @@ Ogni tabella applicativa ha una nota dedicata con colonne, riferimenti, vincoli 
 - [[DB - parts_partsupplieroffer]]
 - [[DB - parts_partdocument]]
 - [[DB - parts_partmovement]]
-- [[DB - fleet_partsrequest]]
+- [[DB - parts_partsrequest]]
+- [[DB - parts_jobpartusage]]
+- [[DB - parts_warehousenote]]
+- [[DB - parts_warehousenoteread]]
 
 ### Garanzie, allegati e tracciamento
 
-- [[DB - fleet_warrantyclaim]]
-- [[DB - fleet_warrantyreturn]]
-- [[DB - fleet_attachment]]
-- [[DB - fleet_notification]]
-- [[DB - fleet_auditlog]]
+- [[DB - orders_warrantyclaim]]
+- [[DB - orders_warrantyreturn]]
+- [[DB - orders_attachment]]
+- [[DB - orders_notification]]
+- [[DB - orders_auditlog]]
 
 ```mermaid
 erDiagram
@@ -173,21 +176,26 @@ erDiagram
     clientandsuppliers_camperowner ||--o{ orders_workorder : customer
     fleet_camper ||--o{ orders_workorder : vehicle
     orders_workorder ||--o{ orders_job : jobs
-    orders_job ||--o{ fleet_jobparticipation : mechanics
-    accounts_user ||--o{ fleet_jobparticipation : mechanic
-    orders_job ||--o{ fleet_timeevent : time_events
-    orders_pausereason ||--o{ fleet_timeevent : pause_reason
-    orders_workorder ||--o{ fleet_partsrequest : parts_requests
-    parts_part ||--o{ fleet_partsrequest : requested_part
+    orders_job ||--o{ orders_jobparticipation : mechanics
+    accounts_user ||--o{ orders_jobparticipation : mechanic
+    orders_job ||--o{ orders_timeevent : time_events
+    orders_pausereason ||--o{ orders_timeevent : pause_reason
+    orders_workorder ||--o{ parts_partsrequest : parts_requests
+    parts_part ||--o{ parts_partsrequest : requested_part
+    orders_job ||--o{ parts_jobpartusage : consumed_parts
+    parts_part ||--o{ parts_jobpartusage : consumed_part
+    orders_workorder ||--o{ parts_warehousenote : warehouse_notes
+    parts_partsrequest o|--o{ parts_warehousenote : request
+    parts_warehousenote ||--o{ parts_warehousenoteread : read_receipts
     parts_part ||--o{ parts_partdocument : documents
     parts_part ||--o{ parts_partsupplieroffer : offers
     clientandsuppliers_camperowner ||--o{ parts_partsupplieroffer : supplier
     quotes_quote ||--o{ quotes_quoteline : lines
     orders_workorder o|--o| quotes_quote : converted_from
-    fleet_documentcategory ||--o{ fleet_camperphoto : category
-    fleet_documentcategory ||--o{ parts_partdocument : category
-    fleet_documentcategory ||--o{ clientandsuppliers_contactdocument : category
-    fleet_documentcategory ||--o{ fleet_attachment : category
+    orders_documentcategory ||--o{ fleet_camperphoto : category
+    orders_documentcategory ||--o{ parts_partdocument : category
+    orders_documentcategory ||--o{ clientandsuppliers_contactdocument : category
+    orders_documentcategory ||--o{ orders_attachment : category
 ```
 
 > [!info] Tabelle Django

@@ -28,24 +28,21 @@
         <table>
             <thead>
                 <tr>
-                    <th>{% translate "Type" %}</th><th>{% translate "Customer code" %}</th><th>{% translate "Contact" %}</th><th>{% translate "Phone" %}</th><th>{% translate "Email" %}</th>
-                    <th>{% translate "VAT number" %}</th><th>{% translate "City" %}</th><th></th>
+                    <th>{% translate "Type" %}</th><th>{% translate "Code" %}</th><th>{% translate "Contact" %}</th><th>{% translate "Phone" %}</th><th>{% translate "Email" %}</th>
+                    <th>{% translate "VAT number" %}</th><th>{% translate "City" %}</th><th>{% translate "Campers" %}</th>
                 </tr>
             </thead>
             <tbody>
                 {% for contact in contacts %}
                 <tr>
                     <td>{{ contact.get_kind_display }}</td>
-                    <td>{{ contact.customer_code|default:"—" }}</td>
+                    <td>{% if contact.is_customer %}<a href="{% url 'customer_detail' pk=contact.pk %}">{{ contact.customer_code }}</a>{% endif %}{% if contact.is_customer and contact.is_supplier %} · {% endif %}{% if contact.is_supplier %}<a href="{% url 'customer_detail' pk=contact.pk %}">{{ contact.supplier_code }}</a>{% endif %}</td>
                     <td>{{ contact }}</td>
                     <td>{{ contact.phone|default:"—" }}</td>
                     <td>{{ contact.email|default:"—" }}</td>
                     <td>{{ contact.vat_number|default:"—" }}</td>
                     <td>{{ contact.city|default:"—" }}</td>
-                    <td>
-                        <a href="{% url 'customer_detail' pk=contact.pk %}">{% translate "Documents" %}</a> ·
-                        <a href="{% url 'customer_edit' pk=contact.pk %}">{% translate "Edit" %}</a>
-                    </td>
+                    <td>{% if contact.is_customer %}{{ contact.camper_count }}{% else %}—{% endif %}</td>
                 </tr>
                 {% endfor %}
             </tbody>

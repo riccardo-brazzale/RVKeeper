@@ -77,7 +77,7 @@ msgid "My jobs"
 msgstr "Le mie lavorazioni"
 
 msgid "Work orders"
-msgstr "Ordini di lavoro"
+msgstr "Ordini Cliente"
 
 msgid "Quotes"
 msgstr "Preventivi"
@@ -742,6 +742,60 @@ msgstr "Tipo"
 msgid "Unit price"
 msgstr "Prezzo unitario"
 
+msgid "Customer code association"
+msgstr "Cliente associato"
+
+msgid "Generic price list"
+msgstr "Listino generico"
+
+msgid "Price list"
+msgstr "Listino prezzi"
+
+msgid "Use the CLIENTE price list"
+msgstr "Usa il listino CLIENTE"
+
+msgid "The CLIENTE price list is not configured for this workshop."
+msgstr "Il listino CLIENTE non è configurato per questa officina."
+
+msgid "CLIENTE and OFFICINE price lists cannot be assigned to a single customer."
+msgstr "I listini CLIENTE e OFFICINE non possono essere associati a un singolo cliente."
+
+msgid "A price list cannot be both CLIENTE and OFFICINE."
+msgstr "Un listino non può essere contemporaneamente CLIENTE e OFFICINE."
+
+msgid "The CLIENTE price list must stay active."
+msgstr "Il listino CLIENTE deve restare attivo."
+
+msgid "This labor code already exists; add it from the list entries."
+msgstr "Questo codice manodopera esiste già; aggiungilo dalle voci del listino."
+
+msgid "Enter each labor code only once."
+msgstr "Inserisci ogni codice manodopera una sola volta."
+
+msgid "Prices"
+msgstr "Prezzi"
+
+msgid "Manage prices"
+msgstr "Gestisci prezzi"
+
+msgid "Save prices"
+msgstr "Salva prezzi"
+
+msgid "Price lists and sales prices"
+msgstr "Listini e prezzi di vendita"
+
+msgid "Back to part"
+msgstr "Torna all'articolo"
+
+msgid "Part prices updated."
+msgstr "Prezzi articolo aggiornati."
+
+msgid "Enter your username and the email address registered to that account. We will send instructions to set a new password."
+msgstr "Inserisci il nome utente e l'indirizzo email associato all'account. Ti invieremo le istruzioni per impostare una nuova password."
+
+msgid "If the username and email match an active account, you will receive instructions to reset your password."
+msgstr "Se il nome utente e l'email corrispondono a un account attivo, riceverai le istruzioni per reimpostare la password."
+
 msgid "Update"
 msgstr "Aggiorna"
 
@@ -825,6 +879,48 @@ msgstr "La nuova password è stata salvata. Ora puoi accedere con il tuo nome ut
 
 msgid "PDF report"
 msgstr "Prospetto PDF"
+
+msgid "Billing prices"
+msgstr "Prezzi di fatturazione"
+
+msgid "Proposed prices are calculated using the list price valid on"
+msgstr "I prezzi proposti sono calcolati in base al listino valido il"
+
+msgid "Parts delivered"
+msgstr "Ricambi consegnati"
+
+msgid "Proposed unit price"
+msgstr "Prezzo unitario proposto"
+
+msgid "Invoice unit price"
+msgstr "Prezzo unitario in fattura"
+
+msgid "No delivered parts."
+msgstr "Nessun ricambio consegnato."
+
+msgid "Labor"
+msgstr "Manodopera"
+
+msgid "Proposed hourly rate"
+msgstr "Tariffa oraria proposta"
+
+msgid "Invoice hourly rate"
+msgstr "Tariffa oraria in fattura"
+
+msgid "Hourly rate"
+msgstr "Tariffa oraria"
+
+msgid "No billable labor."
+msgstr "Nessuna manodopera fatturabile."
+
+msgid "No parts consumed from stock."
+msgstr "Nessun ricambio consumato da magazzino."
+
+msgid "Billing prices are restricted to office staff."
+msgstr "La gestione dei prezzi di fatturazione è riservata al personale d'ufficio."
+
+msgid "Billing prices were updated."
+msgstr "Prezzi di fatturazione aggiornati."
 
 msgid "Administrative work order closure is restricted to reception staff."
 msgstr "La chiusura amministrativa dell'ordine è riservata al personale di accettazione."
@@ -1392,3 +1488,81 @@ msgstr "Totali per ordine di lavoro"
 
 msgid "Totals by technician"
 msgstr "Totali per tecnico"
+
+msgid "Remind warehouse"
+msgstr "Sollecita a magazzino"
+
+msgid "Warehouse reminder awaiting reply"
+msgstr "Sollecito al magazzino in attesa di risposta"
+
+msgid "Estimated delivery"
+msgstr "Consegna stimata"
+
+msgid "Availability"
+msgstr "Disponibilità"
+
+msgid "Available in stock"
+msgstr "Disponibile a magazzino"
+
+msgid "To order from supplier"
+msgstr "Da ordinare al fornitore"
+
+msgid "Time estimate"
+msgstr "Tempo stimato"
+
+msgid "Send estimate"
+msgstr "Invia stima"
+
+msgid "Minutes if in stock, days if ordered from supplier."
+msgstr "Minuti se disponibile a magazzino, giorni se da ordinare al fornitore."
+
+msgid "Only mechanics can remind the warehouse."
+msgstr "Solo i meccanici possono sollecitare il magazzino."
+
+msgid "Only warehouse staff can update warehouse requests."
+msgstr "Solo il magazzino può aggiornare le richieste ricambi."
+
+msgid "A delivery estimate cannot be recorded for this request status."
+msgstr "Non è possibile registrare una stima di consegna per lo stato attuale della richiesta."
+
+msgid "Enter a positive delivery estimate."
+msgstr "Inserisci una stima di consegna maggiore di zero."
+
+msgid "%(item)s · Estimated delivery: %(value)s %(unit)s"
+msgstr "%(item)s · Consegna stimata: %(value)s %(unit)s"
+
+msgid "Warehouse delivery estimate"
+msgstr "Stima di consegna dal magazzino"
+
+msgid "Delivery estimate sent to the mechanic."
+msgstr "Stima di consegna inviata al meccanico."
+
+msgid "You can only remind the warehouse about parts for your active jobs."
+msgstr "Puoi sollecitare il magazzino solo per ricambi delle tue lavorazioni attive."
+
+msgid "This parts request cannot be sent to the warehouse in its current state."
+msgstr "La richiesta non può essere inviata al magazzino nello stato attuale."
+
+msgid "A warehouse reminder is already waiting for a reply."
+msgstr "Un sollecito al magazzino è già in attesa di risposta."
+
+msgid "Warehouse reminder"
+msgstr "Sollecito al magazzino"
+
+msgid "%(order)s · %(item)s · requested quantity: %(quantity)s %(unit)s"
+msgstr "%(order)s · %(item)s · quantità richiesta: %(quantity)s %(unit)s"
+
+msgid "Warehouse reminder sent."
+msgstr "Sollecito inviato al magazzino."
+
+msgid "Requested parts"
+msgstr "Ricambi richiesti"
+
+msgid "Parts used"
+msgstr "Ricambi usati"
+
+msgid "No parts requested for this job."
+msgstr "Nessun ricambio richiesto per questa lavorazione."
+
+msgid "No parts used for this job."
+msgstr "Nessun ricambio usato per questa lavorazione."

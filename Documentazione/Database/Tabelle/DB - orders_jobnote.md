@@ -1,17 +1,17 @@
 ---
-title: "fleet_jobnote"
+title: "orders_jobnote"
 tags:
   - rvkeeper
   - database-table
-  - fleet
+  - orders
 ---
 
-# `fleet_jobnote`
+# `orders_jobnote`
 
-**Modello Django:** `fleet.JobNote`  
+**Modello Django:** `orders.JobNote`  
 **Descrizione:** job note  
-**App:** `fleet`  
-**Codice:** [fleet/models.py](../../../fleet/models.py)
+**App:** `orders`  
+**Codice:** [orders/models.py](../../../fleet/models.py)
 
 ## Colonne
 

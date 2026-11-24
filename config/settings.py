@@ -61,6 +61,7 @@ MIDDLEWARE = [
     'django.middleware.common.CommonMiddleware',
     'django.middleware.csrf.CsrfViewMiddleware',
     'django.contrib.auth.middleware.AuthenticationMiddleware',
+    'accounts.middleware.AuthenticationSessionMiddleware',
     'accounts.middleware.PreferredLanguageMiddleware',
     'django.contrib.messages.middleware.MessageMiddleware',
     'django.middleware.clickjacking.XFrameOptionsMiddleware',
@@ -79,7 +80,7 @@ TEMPLATES = [
                 'django.contrib.auth.context_processors.auth',
                 'django.contrib.messages.context_processors.messages',
                 'django.template.context_processors.i18n',
-                'fleet.context_processors.notification_summary',
+                'orders.context_processors.notification_summary',
             ],
         },
     },
@@ -169,17 +170,44 @@ LOGIN_URL = "login"
 LOGIN_REDIRECT_URL = "home"
 LOGOUT_REDIRECT_URL = "login"
 
+# Session and CSRF cookies are browser-session cookies: closing the browser
+# discards them and requires a fresh login.
+SESSION_EXPIRE_AT_BROWSER_CLOSE = True
+SESSION_COOKIE_HTTPONLY = True
+CSRF_COOKIE_HTTPONLY = True
+CSRF_COOKIE_AGE = None
+
 
 LOGGING = {
     "version": 1,
     "disable_existing_loggers": False,
+    "formatters": {
+        "structured": {
+            "()": "config.logging.StructuredContextFormatter",
+        },
+    },
     "handlers": {
-        "console": {"class": "logging.StreamHandler"},
+        "console": {"class": "logging.StreamHandler", "formatter": "structured"},
     },
     "loggers": {
         "django.request": {
             "handlers": ["console"],
             "level": "ERROR",
+            "propagate": False,
+        },
+        "fleet": {
+            "handlers": ["console"],
+            "level": "INFO",
+            "propagate": False,
+        },
+        "orders": {
+            "handlers": ["console"],
+            "level": "INFO",
+            "propagate": False,
+        },
+        "parts": {
+            "handlers": ["console"],
+            "level": "INFO",
             "propagate": False,
         },
     },

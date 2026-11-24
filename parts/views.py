@@ -1,17 +1,45 @@
+import csv
+import io
+import logging
+import os
+from zipfile import BadZipFile
 from decimal import Decimal, InvalidOperation
+from datetime import date
 
 from django.contrib import messages
 from django.contrib.auth.decorators import login_required
+from django.core.exceptions import ValidationError
+from django.core.paginator import Paginator
 from django.db import models, transaction
-from django.http import Http404, HttpResponseForbidden
+from django.http import Http404, HttpResponse, HttpResponseForbidden, HttpResponseNotAllowed
 from django.shortcuts import get_object_or_404, redirect, render
+from django.utils import timezone
 from django.utils.translation import gettext_lazy as _
+from openpyxl import load_workbook
+from openpyxl.utils.exceptions import InvalidFileException
 
+from clientandsuppliers.models import CamperOwner
 from workshops.models import Membership
-from fleet.models import AuditLog, Notification
-from orders.models import WorkOrder
-from .models import Part, PartDocument, PartMovement, PartSupplierOffer
-from .forms import PartDocumentForm, PartForm, PartSupplierOfferForm
+from orders.models import AuditLog, Notification, PriceList, PriceListItem, WorkOrder
+from orders.pricing import ensure_workshop_price_list
+from .documents import goods_receipt_pdf, purchase_order_pdf
+from .models import (
+    GoodsReceipt,
+    Part,
+    PartDocument,
+    PartMovement,
+    PartSupplierOffer,
+    PartsRequest,
+    PurchaseOrder,
+    PurchaseOrderLine,
+    SupplierPriceList,
+    SupplierPriceListItem,
+)
+from .forms import PartDocumentForm, PartForm, PartPricesForm, PartSupplierOfferForm
+from .services import receive_purchase_order_line
+
+
+logger = logging.getLogger(__name__)
 
 
 def _active_workshop(user):
@@ -48,20 +76,29 @@ def inventory(request):
         return redirect("home")
     is_mechanic = _is_mechanic(request.user)
     parts = Part.objects.filter(workshop=workshop)
-    if is_mechanic:
-        parts = parts.defer("sale_price")
     query = request.GET.get("q", "").strip()
     if query:
         parts = parts.filter(models.Q(part_number__icontains=query) | models.Q(name__icontains=query) |
-                             models.Q(description__icontains=query) | models.Q(location__icontains=query))
+                             models.Q(description__icontains=query) | models.Q(location__icontains=query) |
+                             models.Q(supplier_offers__supplier_code__istartswith=query) |
+                             models.Q(supplier_offers__supplier_code__iexact=query) |
+                             models.Q(supplier_price_list_items__supplier_article_code__istartswith=query) |
+                             models.Q(supplier_price_list_items__supplier_article_code__iexact=query)).distinct()
     low_stock = parts.filter(quantity__lte=models.F("min_stock"))
-    for part in low_stock:
+    for part in low_stock.iterator():
         Notification.objects.get_or_create(
             workshop=workshop, user=None, title=_("Low parts stock"), link="/magazzino/", read=False,
             defaults={"body": f"{part.part_number} · {part.name}: disponibili {part.quantity}, minimo {part.min_stock}"},
         )
+    page_obj = Paginator(parts.select_related("article_class", "article_group").order_by("name", "pk"), 50).get_page(
+        request.GET.get("page")
+    )
     return render(request, "parts/part_list.html", {
-        "parts": parts, "query": query, "low_stock_count": low_stock.count(), "is_mechanic": is_mechanic,
+        "parts": page_obj,
+        "page_obj": page_obj,
+        "query": query,
+        "low_stock_count": low_stock.count(),
+        "is_mechanic": is_mechanic,
     })
 
 
@@ -72,7 +109,7 @@ def part_create(request):
     workshop = _workshop_or_redirect(request)
     if workshop is None:
         return redirect("home")
-    form = PartForm(request.POST or None)
+    form = PartForm(request.POST or None, workshop=workshop)
     if request.method == "POST" and form.is_valid():
         part = form.save(commit=False)
         part.workshop = workshop
@@ -91,7 +128,7 @@ def part_edit(request, pk):
     if workshop is None:
         return redirect("home")
     part = get_object_or_404(Part, pk=pk, workshop=workshop)
-    form = PartForm(request.POST or None, instance=part)
+    form = PartForm(request.POST or None, instance=part, workshop=workshop)
     if request.method == "POST" and form.is_valid():
         part = form.save()
         _audit(workshop, request.user, "update", part)
@@ -106,18 +143,101 @@ def part_detail(request, pk):
     if workshop is None:
         return redirect("home")
     is_mechanic = _is_mechanic(request.user)
-    queryset = Part.objects.defer("sale_price") if is_mechanic else Part.objects.all()
-    part = get_object_or_404(queryset, pk=pk, workshop=workshop)
+    part = get_object_or_404(Part, pk=pk, workshop=workshop)
+    price_items = PriceListItem.objects.none()
+    if not is_mechanic:
+        price_items = PriceListItem.objects.filter(
+            part=part,
+            price_list__workshop=workshop,
+            price_list__is_active=True,
+            price_list__customer__isnull=True,
+        ).select_related("price_list", "price_list__customer").order_by(
+            "-price_list__is_default", "-price_list__is_workshop", "price_list__name",
+        )
+        for item in price_items:
+            item.unit_price = item.price_for_date(timezone.localdate())
     return render(request, "parts/part_detail.html", {
         "part": part,
         "offers": [] if is_mechanic else part.supplier_offers.select_related("supplier"),
         "documents": part.documents.select_related("uploaded_by", "category"),
         "is_mechanic": is_mechanic,
+        "price_items": price_items,
+    })
+
+
+@login_required
+def part_price_lists(request, pk):
+    if denied := _deny_mechanic(request):
+        return denied
+    workshop = _workshop_or_redirect(request)
+    if workshop is None:
+        return redirect("home")
+    part = get_object_or_404(Part, pk=pk, workshop=workshop)
+    price_lists = list(
+        PriceList.objects.filter(
+            workshop=workshop,
+            is_active=True,
+            customer__isnull=True,
+        ).select_related("customer").order_by(
+            "-is_default", "-is_workshop", "name", "code",
+        )
+    )
+    default_list = next((price_list for price_list in price_lists if price_list.is_default), None)
+    if default_list is None:
+        raise Http404("The workshop does not have an active CLIENTE price list.")
+
+    price_items = {
+        item.price_list_id: item
+        for item in PriceListItem.objects.filter(price_list__in=price_lists, part=part)
+    }
+    form = PartPricesForm(
+        request.POST or None,
+        price_lists=price_lists,
+        price_items=price_items,
+    )
+    if request.method == "POST" and form.is_valid():
+        with transaction.atomic():
+            for price_list in price_lists:
+                names = form.field_names[price_list.pk]
+                values = {
+                    "previous_price": form.cleaned_data[names["previous"]["price"]],
+                    "previous_valid_from": form.cleaned_data[names["previous"]["date"]],
+                    "unit_price": form.cleaned_data[names["current"]["price"]],
+                    "valid_from": form.cleaned_data[names["current"]["date"]],
+                    "future_price": form.cleaned_data[names["future"]["price"]],
+                    "future_valid_from": form.cleaned_data[names["future"]["date"]],
+                }
+                if values["unit_price"] is None:
+                    PriceListItem.objects.filter(price_list=price_list, part=part).delete()
+                else:
+                    PriceListItem.objects.update_or_create(
+                        price_list=price_list,
+                        part=part,
+                        defaults=values,
+                    )
+            ensure_workshop_price_list(workshop)
+        messages.success(request, _("Part prices updated."))
+        return redirect("part_detail", pk=part.pk)
+
+    price_rows = []
+    for price_list in price_lists:
+        row = {"price_list": price_list}
+        for slot in ("previous", "current", "future"):
+            names = form.field_names[price_list.pk][slot]
+            row[f"{slot}_price"] = form[names["price"]]
+            row[f"{slot}_date"] = form[names["date"]]
+        price_rows.append(row)
+    return render(request, "parts/part_price_list_form.html", {
+        "part": part,
+        "form": form,
+        "price_rows": price_rows,
     })
 
 
 @login_required
 def part_movement(request, pk):
+    if denied := _deny_mechanic(request):
+        return denied
     workshop = _workshop_or_redirect(request)
     if workshop is None:
         return redirect("home")
@@ -200,3 +320,378 @@ def part_document_upload(request, part_pk):
         messages.success(request, _("Attachment added to the part details."))
         return redirect("part_detail", pk=part.pk)
     return render(request, "parts/part_document_form.html", {"form": form, "part": part})
+
+
+def _can_manage_purchasing(user):
+    return (
+        user.is_administrator
+        or getattr(user, "profile", "") == "warehouse"
+        or user.has_perm("parts.manage_supplier_purchasing")
+    )
+
+
+def _deny_purchasing_access(request):
+    if not _can_manage_purchasing(request.user):
+        return HttpResponseForbidden("Solo il magazziniere o un amministratore può gestire gli acquisti.")
+    return None
+
+
+@login_required
+def purchase_order_list(request):
+    if denied := _deny_purchasing_access(request):
+        return denied
+    workshop = _workshop_or_redirect(request)
+    if workshop is None:
+        return redirect("home")
+    orders = PurchaseOrder.objects.filter(
+        workshop=workshop,
+        status__in=("open", "partially_received"),
+    ).select_related("supplier").prefetch_related("lines__part")
+    return render(request, "parts/purchase_order_list.html", {"purchase_orders": orders})
+
+
+@login_required
+def purchase_order_detail(request, pk):
+    if denied := _deny_purchasing_access(request):
+        return denied
+    workshop = _workshop_or_redirect(request)
+    if workshop is None:
+        return redirect("home")
+    order = get_object_or_404(
+        PurchaseOrder.objects.select_related("supplier", "workshop").prefetch_related("lines__part"),
+        pk=pk,
+        workshop=workshop,
+    )
+    if request.method == "POST":
+        if request.POST.get("action") == "close":
+            with transaction.atomic():
+                locked = PurchaseOrder.objects.select_for_update().get(pk=order.pk, workshop=workshop)
+                if locked.status not in ("open", "partially_received"):
+                    messages.error(request, "L'ordine non può essere saldato nello stato attuale.")
+                else:
+                    locked.status = "closed"
+                    locked.closed_at = timezone.now()
+                    locked.save(update_fields=("status", "closed_at"))
+                    logger.info(
+                        "Ordine fornitore saldato",
+                        extra={"purchase_order_id": locked.pk, "supplier_id": locked.supplier_id, "user_id": request.user.pk},
+                    )
+                    messages.success(request, "Ordine fornitore saldato, anche con righe non completamente ricevute.")
+            return redirect("purchase_order_detail", pk=order.pk)
+        if request.POST.get("action") != "prices":
+            return HttpResponseNotAllowed(["GET", "POST"])
+        if order.status not in ("open", "sent", "partially_received"):
+            messages.error(request, "I prezzi non possono essere modificati su un ordine chiuso o annullato.")
+            return redirect("purchase_order_detail", pk=order.pk)
+
+        updates = []
+        errors = []
+        for line in order.lines.all():
+            try:
+                price = Decimal(request.POST.get(f"price_{line.pk}", ""))
+                discount = Decimal(request.POST.get(f"discount_{line.pk}", ""))
+                if price < 0 or not 0 <= discount <= 100:
+                    raise InvalidOperation
+            except (InvalidOperation, TypeError):
+                errors.append(f"{line.part.part_number}: prezzo o sconto non valido.")
+            else:
+                updates.append((line.pk, price, discount))
+        if errors:
+            for error in errors:
+                messages.error(request, error)
+        else:
+            with transaction.atomic():
+                for line_id, price, discount in updates:
+                    line = PurchaseOrderLine.objects.select_for_update().get(
+                        pk=line_id, purchase_order=order,
+                    )
+                    line.unit_price = price
+                    line.discount_percent = discount
+                    line.save(update_fields=("unit_price", "discount_percent"))
+            logger.info(
+                "Prezzi ordine fornitore aggiornati",
+                extra={"purchase_order_id": order.pk, "supplier_id": order.supplier_id, "user_id": request.user.pk},
+            )
+            messages.success(request, "Prezzi e sconti dell'ordine aggiornati.")
+        return redirect("purchase_order_detail", pk=order.pk)
+
+    return render(request, "parts/purchase_order_detail.html", {"purchase_order": order})
+
+
+@login_required
+def purchase_order_receive(request, pk):
+    if denied := _deny_purchasing_access(request):
+        return denied
+    workshop = _workshop_or_redirect(request)
+    if workshop is None:
+        return redirect("home")
+    order = get_object_or_404(
+        PurchaseOrder.objects.prefetch_related("lines__part"),
+        pk=pk,
+        workshop=workshop,
+    )
+    if order.status not in ("open", "sent", "partially_received"):
+        messages.error(request, "L'ordine non è disponibile per registrare altre entrate.")
+        return redirect("purchase_order_detail", pk=order.pk)
+    if request.method == "POST":
+        receipt_number = request.POST.get("receipt_number", "").strip()
+        if not receipt_number:
+            messages.error(request, "Inserisci il numero della bolla di entrata.")
+            return redirect("purchase_order_receive", pk=order.pk)
+        if GoodsReceipt.objects.filter(
+            workshop=workshop, receipt_number=receipt_number,
+        ).exclude(purchase_order=order).exists():
+            messages.error(request, "Il numero bolla è già associato a un altro ordine.")
+            return redirect("purchase_order_receive", pk=order.pk)
+        received = []
+        errors = []
+        for line in order.lines.all():
+            raw_quantity = request.POST.get(f"received_{line.pk}", "").strip()
+            if not raw_quantity:
+                continue
+            try:
+                quantity = Decimal(raw_quantity)
+                if quantity <= 0:
+                    raise InvalidOperation
+            except (InvalidOperation, TypeError):
+                errors.append(f"{line.part.part_number}: quantità non valida.")
+            else:
+                received.append((line, quantity))
+        if not received:
+            errors.append("Inserisci almeno una quantità ricevuta.")
+        if errors:
+            for error in errors:
+                messages.error(request, error)
+            return redirect("purchase_order_receive", pk=order.pk)
+        try:
+            with transaction.atomic():
+                for line, quantity in received:
+                    receive_purchase_order_line(
+                        line,
+                        quantity,
+                        user=request.user,
+                        receipt_number=receipt_number,
+                    )
+        except ValidationError as error:
+            for message in error.messages:
+                messages.error(request, message)
+            return redirect("purchase_order_receive", pk=order.pk)
+        messages.success(request, "Entrata merce registrata.")
+        return redirect("purchase_order_detail", pk=order.pk)
+    for line in order.lines.all():
+        line.quantity_remaining = line.quantity_ordered - line.quantity_received
+    return render(request, "parts/purchase_order_receive.html", {"purchase_order": order})
+
+
+@login_required
+def purchase_order_document(request, pk):
+    if denied := _deny_purchasing_access(request):
+        return denied
+    workshop = _workshop_or_redirect(request)
+    if workshop is None:
+        return redirect("home")
+    order = get_object_or_404(
+        PurchaseOrder.objects.select_related("supplier").prefetch_related("lines__part"),
+        pk=pk,
+        workshop=workshop,
+    )
+    response = HttpResponse(purchase_order_pdf(order), content_type="application/pdf")
+    response["Content-Disposition"] = f'inline; filename="ordine-fornitore-{order.pk}.pdf"'
+    return response
+
+
+@login_required
+def goods_receipt_document(request, pk):
+    if denied := _deny_purchasing_access(request):
+        return denied
+    workshop = _workshop_or_redirect(request)
+    if workshop is None:
+        return redirect("home")
+    receipt = get_object_or_404(
+        GoodsReceipt.objects.select_related("purchase_order", "purchase_order__supplier")
+        .prefetch_related("lines__purchase_order_line__part"),
+        pk=pk,
+        workshop=workshop,
+    )
+    response = HttpResponse(goods_receipt_pdf(receipt), content_type="application/pdf")
+    response["Content-Disposition"] = f'inline; filename="bolla-entrata-{receipt.pk}.pdf"'
+    return response
+
+
+@login_required
+def supplier_price_list_list(request):
+    if denied := _deny_purchasing_access(request):
+        return denied
+    workshop = _workshop_or_redirect(request)
+    if workshop is None:
+        return redirect("home")
+    price_lists = SupplierPriceList.objects.filter(workshop=workshop).select_related(
+        "supplier",
+    ).prefetch_related("items")
+    suppliers = CamperOwner.objects.filter(
+        workshop=workshop,
+        kind__in=("supplier", "both"),
+    )
+    return render(request, "parts/supplier_price_list_list.html", {
+        "price_lists": price_lists,
+        "suppliers": suppliers,
+    })
+
+
+def _read_supplier_price_rows(upload):
+    extension = os.path.splitext(upload.name)[1].lower()
+    if extension == ".csv":
+        text = upload.read().decode("utf-8-sig")
+        reader = csv.DictReader(io.StringIO(text))
+        return list(reader), list(reader.fieldnames or [])
+    if extension == ".xlsx":
+        workbook = load_workbook(upload, read_only=True, data_only=True)
+        try:
+            worksheet = workbook.active
+            rows = worksheet.iter_rows(values_only=True)
+            headers = [str(value or "").strip() for value in next(rows, ())]
+            return [
+                dict(zip(headers, row))
+                for row in rows
+                if any(value is not None for value in row)
+            ], headers
+        finally:
+            workbook.close()
+    raise ValidationError("Formato non supportato. Carica un file CSV o Excel .xlsx.")
+
+
+def _price_row_value(row, *names):
+    normalized = {
+        str(key or "").strip().lower().replace(" ", "_"): value
+        for key, value in row.items()
+    }
+    for name in names:
+        if name in normalized:
+            return normalized[name]
+    return None
+
+
+@login_required
+def supplier_price_list_import(request):
+    if denied := _deny_purchasing_access(request):
+        return denied
+    workshop = _workshop_or_redirect(request)
+    if workshop is None:
+        return redirect("home")
+    suppliers = CamperOwner.objects.filter(workshop=workshop, kind__in=("supplier", "both"))
+    errors = []
+    imported_count = 0
+    if request.method == "POST":
+        supplier = suppliers.filter(pk=request.POST.get("supplier")).first()
+        code = request.POST.get("code", "").strip()
+        name = request.POST.get("name", "").strip()
+        upload = request.FILES.get("file")
+        try:
+            valid_from = date.fromisoformat(request.POST.get("valid_from", ""))
+        except (TypeError, ValueError):
+            valid_from = None
+            errors.append("Inserisci una data di inizio validità valida.")
+        raw_valid_to = request.POST.get("valid_to", "")
+        try:
+            valid_to = date.fromisoformat(raw_valid_to) if raw_valid_to else None
+        except (TypeError, ValueError):
+            valid_to = None
+            errors.append("Inserisci una data finale di validità valida.")
+        if supplier is None:
+            errors.append("Seleziona un fornitore valido.")
+        if not code:
+            errors.append("Inserisci il codice del listino.")
+        if valid_to and valid_from and valid_to < valid_from:
+            errors.append("La data finale non può precedere quella iniziale.")
+        if upload is None:
+            errors.append("Seleziona il file del listino.")
+        if supplier and code and SupplierPriceList.objects.filter(
+            workshop=workshop, supplier=supplier, code=code,
+        ).exists():
+            errors.append("Esiste già un listino con questo codice per il fornitore.")
+        rows = []
+        if upload is not None:
+            try:
+                rows, headers = _read_supplier_price_rows(upload)
+                normalized_headers = {
+                    str(value or "").strip().lower().replace(" ", "_") for value in headers
+                }
+                if not normalized_headers.intersection(
+                    ("supplier_article_code", "codice_articolo_fornitore"),
+                ):
+                    errors.append("Manca la colonna codice_articolo_fornitore.")
+                if not normalized_headers.intersection(("unit_price", "prezzo")):
+                    errors.append("Manca la colonna prezzo.")
+            except (
+                BadZipFile,
+                InvalidFileException,
+                UnicodeDecodeError,
+                csv.Error,
+                OSError,
+                ValidationError,
+            ) as error:
+                errors.append(str(error))
+                rows = []
+        import_allowed = not errors
+        valid_rows = []
+        seen_codes = set()
+        for row_number, row in enumerate(rows, start=2):
+            supplier_code = str(_price_row_value(row, "supplier_article_code", "codice_articolo_fornitore") or "").strip()
+            internal_code = str(_price_row_value(row, "internal_article_code", "codice_interno") or "").strip()
+            try:
+                price = Decimal(str(_price_row_value(row, "unit_price", "prezzo")))
+                discount_value = _price_row_value(row, "discount_percent", "sconto")
+                discount = Decimal(str(discount_value or "0"))
+                if price < 0 or not 0 <= discount <= 100:
+                    raise InvalidOperation
+            except (InvalidOperation, TypeError, ValueError):
+                errors.append(f"Riga {row_number}: prezzo o sconto non valido.")
+                continue
+            if not supplier_code:
+                errors.append(f"Riga {row_number}: codice articolo fornitore mancante.")
+                continue
+            if supplier_code in seen_codes:
+                errors.append(f"Riga {row_number}: codice fornitore duplicato {supplier_code}.")
+                continue
+            seen_codes.add(supplier_code)
+            part = None
+            if internal_code:
+                part = Part.objects.filter(workshop=workshop, part_number=internal_code).first()
+                if part is None:
+                    errors.append(f"Riga {row_number}: articolo interno {internal_code} non trovato.")
+                    continue
+            valid_rows.append((supplier_code, internal_code, part, price, discount))
+        if import_allowed and supplier and code and valid_from and upload and valid_rows:
+            with transaction.atomic():
+                price_list = SupplierPriceList.objects.create(
+                    workshop=workshop,
+                    supplier=supplier,
+                    code=code,
+                    name=name,
+                    valid_from=valid_from,
+                    valid_to=valid_to,
+                )
+                SupplierPriceListItem.objects.bulk_create([
+                    SupplierPriceListItem(
+                        price_list=price_list,
+                        supplier_article_code=supplier_code,
+                        internal_article_code=internal_code,
+                        part=part,
+                        unit_price=price,
+                        discount_percent=discount,
+                    )
+                    for supplier_code, internal_code, part, price, discount in valid_rows
+                ])
+            imported_count = len(valid_rows)
+            messages.success(request, f"Importate {imported_count} righe nel listino {price_list.code}.")
+            logger.info(
+                "Listino fornitore importato",
+                extra={"supplier_id": supplier.pk, "user_id": request.user.pk, "row_count": imported_count},
+            )
+    price_lists = SupplierPriceList.objects.filter(workshop=workshop).select_related("supplier")
+    return render(request, "parts/supplier_price_list_list.html", {
+        "price_lists": price_lists,
+        "suppliers": suppliers,
+        "errors": errors,
+        "imported_count": imported_count,
+    })

@@ -6,7 +6,7 @@
 <section class="panel">
     <h3>{% translate "Incoming calls" %}</h3>
     {% for call in calls %}
-    <article class="panel" style="margin:12px 0;padding:18px">
+    <article class="panel" id="incoming-call-{{ call.pk }}" style="margin:12px 0;padding:18px">
         <b>{{ call.job.work_order.ro_number }} · {{ call.job.title }}</b>
         <p>{% translate "Requested by" %} {{ call.called_by|default:_("Manager") }} · {{ call.created_at|date:"d/m/Y H:i" }}</p>
         <form method="post" action="{% url 'job_action' pk=call.job_id action='accept_call' %}">{% csrf_token %}<input type="hidden" name="call_id" value="{{ call.pk }}"><button type="submit">{% translate "Accept and start timer" %}</button></form>
@@ -17,10 +17,10 @@
 <section class="panel" style="margin-top:18px">
     <h3>{% translate "Personal sessions" %}</h3>
     {% for item in participations %}
-    <article class="panel job-session-card">
+    <article class="panel job-session-card" id="job-session-{{ item.job_id }}">
         <div class="session-heading">
             <div class="session-statuses">
-                {% if item.paused_at %}<span class="session-status session-status-paused">{% translate "Paused" %}{% if item.pause_reason %} · {{ item.pause_reason.label }}{% endif %}</span>
+                {% if item.paused_at %}<span class="session-status session-status-paused"><strong>{% translate "Paused" %}</strong>{% if item.pause_reason %}<span class="pause-cause">{{ item.pause_reason.label }}</span>{% endif %}</span>
                 {% else %}<span class="session-status session-status-active">{% translate "Active" %}</span>{% endif %}
             </div>
             <strong>{{ item.job.work_order.ro_number }} · {{ item.job.title }}</strong>
@@ -37,11 +37,15 @@
 
         <section class="parts-session-section">
             <h4>{% translate "Parts for this job" %}</h4>
+            {% include "fleet/_job_parts_summary.html" with job=item.job %}
             {% for part_request in item.job.parts_requests.all %}
-            <p class="parts-request-status">
-                {% if part_request.status == "delivered" %}<span aria-label="{% translate 'Received' %}">✓</span>{% else %}<span aria-hidden="true">◷</span>{% endif %}
-                <strong>{{ part_request.part|default:part_request.custom_item }}</strong> · {{ part_request.quantity_requested }} {{ part_request.unit }} · {{ part_request.get_status_display }}
-            </p>
+            {% if part_request.status == "new" or part_request.status == "pending" or part_request.status == "preparing" or part_request.status == "on_hold" %}{% if part_request.approval_status == "not_required" or part_request.approval_status == "approved" %}
+            <form class="warehouse-reminder-form" method="post" action="{% url 'parts_request_action' pk=part_request.pk action='remind' %}">
+                {% csrf_token %}
+                {% if part_request.warehouse_reminder_pending %}<button type="button" class="button-add" disabled>{% translate "Warehouse reminder awaiting reply" %}</button>
+                {% else %}<button type="submit" class="button-add">{% translate "Remind warehouse" %}</button>{% endif %}
+            </form>
+            {% endif %}{% endif %}
             {% empty %}<p>{% translate "No parts have been requested for this job." %}</p>{% endfor %}
 
             <form method="post" action="{% url 'job_parts_request' pk=item.job_id %}" data-formset data-confirm="{% translate 'Send this parts request to the warehouse?' %}">

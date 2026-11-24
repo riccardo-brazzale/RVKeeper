@@ -1,17 +1,17 @@
 ---
-title: "fleet_warrantyreturn"
+title: "orders_warrantyreturn"
 tags:
   - rvkeeper
   - database-table
-  - fleet
+  - orders
 ---
 
-# `fleet_warrantyreturn`
+# `orders_warrantyreturn`
 
-**Modello Django:** `fleet.WarrantyReturn`  
+**Modello Django:** `orders.WarrantyReturn`  
 **Descrizione:** warranty return  
-**App:** `fleet`  
-**Codice:** [fleet/models.py](../../../fleet/models.py)
+**App:** `orders`  
+**Codice:** [orders/models.py](../../../fleet/models.py)
 
 ## Colonne
 
@@ -21,7 +21,7 @@ tags:
 | `workshop_id` | `workshop` | `ForeignKey` | NOT NULL -> [[DB - workshops_workshop]] |
 | `work_order_id` | `work_order` | `ForeignKey` | NOT NULL -> [[DB - orders_workorder]] |
 | `job_id` | `job` | `ForeignKey` | NULL, blank -> [[DB - orders_job]] |
-| `parts_request_id` | `parts_request` | `ForeignKey` | NULL, blank -> [[DB - fleet_partsrequest]] |
+| `parts_request_id` | `parts_request` | `ForeignKey` | NULL, blank -> [[DB - parts_partsrequest]] |
 | `part_name` | `part_name` | `CharField` | NOT NULL |
 | `part_number` | `part_number` | `CharField` | blank |
 | `quantity` | `quantity` | `DecimalField` | NOT NULL |
@@ -45,11 +45,11 @@ tags:
 | `workshop` | [[DB - workshops_workshop]] | `CASCADE` |
 | `work_order` | [[DB - orders_workorder]] | `CASCADE` |
 | `job` | [[DB - orders_job]] | `SET_NULL` |
-| `parts_request` | [[DB - fleet_partsrequest]] | `SET_NULL` |
+| `parts_request` | [[DB - parts_partsrequest]] | `SET_NULL` |
 | `decided_by` | [[DB - accounts_user]] | `SET_NULL` |
 | `requested_by` | [[DB - accounts_user]] | `SET_NULL` |
 
 ## Navigazione
 
 - [[Database PostgreSQL RVKeeper]]
-- Tabelle collegate: [[DB - workshops_workshop]], [[DB - orders_workorder]], [[DB - orders_job]], [[DB - fleet_partsrequest]], [[DB - accounts_user]], [[DB - accounts_user]]
+- Tabelle collegate: [[DB - workshops_workshop]], [[DB - orders_workorder]], [[DB - orders_job]], [[DB - parts_partsrequest]], [[DB - accounts_user]], [[DB - accounts_user]]

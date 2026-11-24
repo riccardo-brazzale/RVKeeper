@@ -25,7 +25,7 @@ tags:
 
 ## Riferimenti in ingresso
 
-- [[DB - fleet_timeevent]]. Campo `pause_reason_id` (attributo `pause_reason`).
+- [[DB - orders_timeevent]]. Campo `pause_reason_id` (attributo `pause_reason`).
 
 ## Navigazione
 

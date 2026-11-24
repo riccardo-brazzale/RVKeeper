@@ -20,6 +20,8 @@ sudo ./scripts/provision_server.sh
 
 The installer never drops a database. It preserves an existing `.env`, refuses to overwrite unmanaged systemd/Nginx configuration, and stops if an existing database has pending initial migrations or missing model columns. See [Documentazione/Deployment Linux RVKeeper.md](Documentazione/Deployment%20Linux%20RVKeeper.md) for HTTPS, operations, and recovery details.
 
+Domain ownership is split across Django apps: `fleet` owns campers and photos, `orders` owns work orders and repair workflows, `parts` owns inventory and procurement, and `clientandsuppliers` owns contact records. The app-ownership migrations rename existing tables rather than recreating them.
+
 For a DNS hostname on a fresh install, the installer offers to request a Let's Encrypt certificate. If skipped, the site starts on HTTP; an IPv4 address cannot use this automatic certificate flow.
 
 Keep `.env`, database dumps, uploaded media, and generated static files out of GitHub. The migration files are required to create the schema and must remain in the repository.

@@ -1,17 +1,17 @@
 ---
-title: "fleet_warrantyclaim"
+title: "orders_warrantyclaim"
 tags:
   - rvkeeper
   - database-table
-  - fleet
+  - orders
 ---
 
-# `fleet_warrantyclaim`
+# `orders_warrantyclaim`
 
-**Modello Django:** `fleet.WarrantyClaim`  
+**Modello Django:** `orders.WarrantyClaim`  
 **Descrizione:** warranty claim  
-**App:** `fleet`  
-**Codice:** [fleet/models.py](../../../fleet/models.py)
+**App:** `orders`  
+**Codice:** [orders/models.py](../../../fleet/models.py)
 
 ## Colonne
 
@@ -47,7 +47,7 @@ tags:
 
 ## Riferimenti in ingresso
 
-- [[DB - fleet_partsrequest]]. Campo `warranty_claim_id` (attributo `warranty_claim`).
+- [[DB - parts_partsrequest]]. Campo `warranty_claim_id` (attributo `warranty_claim`).
 
 ## Navigazione
 

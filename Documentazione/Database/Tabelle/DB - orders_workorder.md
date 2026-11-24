@@ -55,12 +55,12 @@ tags:
 
 ## Riferimenti in ingresso
 
-- [[DB - fleet_partsrequest]]. Campo `work_order_id` (attributo `work_order`).
-- [[DB - fleet_warrantyclaim]]. Campo `work_order_id` (attributo `work_order`).
-- [[DB - fleet_warrantyreturn]]. Campo `work_order_id` (attributo `work_order`).
-- [[DB - fleet_attachment]]. Campo `work_order_id` (attributo `work_order`).
-- [[DB - fleet_notification]]. Campo `work_order_id` (attributo `work_order`).
-- [[DB - fleet_auditlog]]. Campo `work_order_id` (attributo `work_order`).
+- [[DB - parts_partsrequest]]. Campo `work_order_id` (attributo `work_order`).
+- [[DB - orders_warrantyclaim]]. Campo `work_order_id` (attributo `work_order`).
+- [[DB - orders_warrantyreturn]]. Campo `work_order_id` (attributo `work_order`).
+- [[DB - orders_attachment]]. Campo `work_order_id` (attributo `work_order`).
+- [[DB - orders_notification]]. Campo `work_order_id` (attributo `work_order`).
+- [[DB - orders_auditlog]]. Campo `work_order_id` (attributo `work_order`).
 - [[DB - orders_job]]. Campo `work_order_id` (attributo `work_order`).
 - [[DB - parts_partmovement]]. Campo `work_order_id` (attributo `work_order`).
 - [[DB - quotes_quote]]. Campo `work_order_id` (attributo `work_order`).

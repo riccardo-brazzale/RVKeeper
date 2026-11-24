@@ -1,17 +1,17 @@
 ---
-title: "fleet_attachment"
+title: "orders_attachment"
 tags:
   - rvkeeper
   - database-table
-  - fleet
+  - orders
 ---
 
-# `fleet_attachment`
+# `orders_attachment`
 
-**Modello Django:** `fleet.Attachment`  
+**Modello Django:** `orders.Attachment`  
 **Descrizione:** attachment  
-**App:** `fleet`  
-**Codice:** [fleet/models.py](../../../fleet/models.py)
+**App:** `orders`  
+**Codice:** [orders/models.py](../../../fleet/models.py)
 
 ## Colonne
 
@@ -21,7 +21,7 @@ tags:
 | `workshop_id` | `workshop` | `ForeignKey` | NOT NULL -> [[DB - workshops_workshop]] |
 | `work_order_id` | `work_order` | `ForeignKey` | NULL, blank -> [[DB - orders_workorder]] |
 | `job_id` | `job` | `ForeignKey` | NULL, blank -> [[DB - orders_job]] |
-| `category_id` | `category` | `ForeignKey` | NOT NULL -> [[DB - fleet_documentcategory]] |
+| `category_id` | `category` | `ForeignKey` | NOT NULL -> [[DB - orders_documentcategory]] |
 | `file` | `file` | `FileField` | NOT NULL |
 | `file_name` | `file_name` | `CharField` | NOT NULL |
 | `caption` | `caption` | `CharField` | blank |
@@ -36,10 +36,10 @@ tags:
 | `workshop` | [[DB - workshops_workshop]] | `CASCADE` |
 | `work_order` | [[DB - orders_workorder]] | `CASCADE` |
 | `job` | [[DB - orders_job]] | `CASCADE` |
-| `category` | [[DB - fleet_documentcategory]] | `PROTECT` |
+| `category` | [[DB - orders_documentcategory]] | `PROTECT` |
 | `uploaded_by` | [[DB - accounts_user]] | `SET_NULL` |
 
 ## Navigazione
 
 - [[Database PostgreSQL RVKeeper]]
-- Tabelle collegate: [[DB - workshops_workshop]], [[DB - orders_workorder]], [[DB - orders_job]], [[DB - fleet_documentcategory]], [[DB - accounts_user]]
+- Tabelle collegate: [[DB - workshops_workshop]], [[DB - orders_workorder]], [[DB - orders_job]], [[DB - orders_documentcategory]], [[DB - accounts_user]]

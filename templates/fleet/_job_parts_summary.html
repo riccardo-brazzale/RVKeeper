@@ -1,0 +1,21 @@
+{% load i18n %}
+<div class="job-parts-summary">
+    <section>
+        <h5>{% translate "Requested parts" %}</h5>
+        <ul>
+            {% for part_request in job.parts_requests.all %}
+            <li><strong>{{ part_request.part|default:part_request.custom_item }}</strong> · {{ part_request.quantity_requested }} {{ part_request.unit }} · {{ part_request.get_status_display }}{% if part_request.warehouse_eta_value %} · {% translate "Estimated delivery" %}: {{ part_request.warehouse_eta_value }} {% if part_request.warehouse_eta_kind == "stock" %}{% translate "minutes" %}{% else %}{% translate "days" %}{% endif %}{% endif %}</li>
+            {% empty %}<li>{% translate "No parts requested for this job." %}</li>
+            {% endfor %}
+        </ul>
+    </section>
+    <section>
+        <h5>{% translate "Parts used" %}</h5>
+        <ul>
+            {% for usage in job.parts_used.all %}
+            <li><strong>{{ usage.part }}</strong> · {{ usage.quantity_used }} {{ usage.part.unit }}</li>
+            {% empty %}<li>{% translate "No parts used for this job." %}</li>
+            {% endfor %}
+        </ul>
+    </section>
+</div>

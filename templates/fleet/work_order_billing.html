@@ -1,0 +1,84 @@
+{% extends "base.html" %}
+{% load i18n %}
+{% block title %}{% translate "Billing prices" %} · {{ order.ro_number }}{% endblock %}
+{% block content %}
+<div class="page-heading">
+    <div>
+        <h2>{% translate "Billing prices" %} · {{ order.ro_number }}</h2>
+        <p>{% translate "Proposed prices are calculated using the list price valid on" %} {{ effective_date|date:"d/m/Y" }}.</p>
+    </div>
+    <div class="actions">
+        <a class="button-link" href="{% url 'work_order_detail' pk=order.pk %}">{% translate "Work order" %}</a>
+        <a class="button-link" href="{% url 'work_order_report' pk=order.pk %}" target="_blank" rel="noopener">{% translate "PDF report" %}</a>
+    </div>
+</div>
+<form method="post">
+    {% csrf_token %}
+    <section class="panel">
+        <h3>{% translate "Parts delivered" %}</h3>
+        {{ parts_formset.management_form }}
+        {{ parts_formset.non_form_errors }}
+        <div class="table-wrap">
+            <table>
+                <thead><tr><th>{% translate "Item" %}</th><th>{% translate "Quantity" %}</th><th>{% translate "Proposed unit price" %}</th><th>{% translate "Invoice unit price" %}</th></tr></thead>
+                <tbody>
+                    {% for form in parts_formset %}
+                    <tr>
+                        {% for hidden in form.hidden_fields %}{{ hidden }}{% endfor %}
+                        <td>{{ form.line_label|default:"—" }}{{ form.non_field_errors }}</td>
+                        <td>{{ form.quantity|default_if_none:"—" }}</td>
+                        <td>{{ form.proposed_price|default_if_none:"—" }}</td>
+                        <td>{{ form.invoice_unit_price_override }}{{ form.invoice_unit_price_override.errors }}</td>
+                    </tr>
+                    {% empty %}<tr><td colspan="4">{% translate "No delivered parts." %}</td></tr>{% endfor %}
+                </tbody>
+            </table>
+        </div>
+    </section>
+    <section class="panel" style="margin-top:18px">
+        <h3>{% translate "Labor" %}</h3>
+        {{ labor_formset.management_form }}
+        {{ labor_formset.non_form_errors }}
+        <div class="table-wrap">
+            <table>
+                <thead><tr><th>{% translate "Job" %}</th><th>{% translate "Hours" %}</th><th>{% translate "Proposed hourly rate" %}</th><th>{% translate "Invoice hourly rate" %}</th></tr></thead>
+                <tbody>
+                    {% for form in labor_formset %}
+                    <tr>
+                        {% for hidden in form.hidden_fields %}{{ hidden }}{% endfor %}
+                        <td>{{ form.line_label|default:"—" }}{{ form.non_field_errors }}</td>
+                        <td>{{ form.quantity|floatformat:2 }}</td>
+                        <td>{{ form.proposed_price|default_if_none:"—" }}</td>
+                        <td>{{ form.invoice_hourly_rate_override }}{{ form.invoice_hourly_rate_override.errors }}</td>
+                    </tr>
+                    {% empty %}<tr><td colspan="4">{% translate "No billable labor." %}</td></tr>{% endfor %}
+                </tbody>
+            </table>
+        </div>
+    </section>
+    <section class="panel" style="margin-top:18px">
+        <h3>{% translate "Parts consumed from stock" %}</h3>
+        {{ usage_formset.management_form }}
+        {{ usage_formset.non_form_errors }}
+        <div class="table-wrap">
+            <table>
+                <thead><tr><th>{% translate "Item" %}</th><th>{% translate "Quantity" %}</th><th>{% translate "Proposed unit price" %}</th><th>{% translate "Invoice unit price" %}</th></tr></thead>
+                <tbody>
+                    {% for form in usage_formset %}
+                    <tr>
+                        {% for hidden in form.hidden_fields %}{{ hidden }}{% endfor %}
+                        <td>{{ form.line_label|default:"—" }}{{ form.non_field_errors }}</td>
+                        <td>{{ form.quantity|default_if_none:"—" }}</td>
+                        <td>{{ form.proposed_price|default_if_none:"—" }}</td>
+                        <td>{{ form.invoice_unit_price_override }}{{ form.invoice_unit_price_override.errors }}</td>
+                    </tr>
+                    {% empty %}<tr><td colspan="4">{% translate "No parts consumed from stock." %}</td></tr>{% endfor %}
+                </tbody>
+            </table>
+        </div>
+    </section>
+    <div class="actions" style="margin-top:18px">
+        <button type="submit">{% translate "Save prices" %}</button>
+    </div>
+</form>
+{% endblock %}

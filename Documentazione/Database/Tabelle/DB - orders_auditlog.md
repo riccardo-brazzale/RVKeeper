@@ -1,17 +1,17 @@
 ---
-title: "fleet_notification"
+title: "orders_auditlog"
 tags:
   - rvkeeper
   - database-table
-  - fleet
+  - orders
 ---
 
-# `fleet_notification`
+# `orders_auditlog`
 
-**Modello Django:** `fleet.Notification`  
-**Descrizione:** notification  
-**App:** `fleet`  
-**Codice:** [fleet/models.py](../../../fleet/models.py)
+**Modello Django:** `orders.AuditLog`  
+**Descrizione:** audit log  
+**App:** `orders`  
+**Codice:** [orders/models.py](../../../fleet/models.py)
 
 ## Colonne
 
@@ -19,12 +19,12 @@ tags:
 |---|---|---|---|
 | `id` | `id` | `BigAutoField` | PK, UNIQUE, blank |
 | `workshop_id` | `workshop` | `ForeignKey` | NOT NULL -> [[DB - workshops_workshop]] |
-| `user_id` | `user` | `ForeignKey` | NULL, blank -> [[DB - accounts_user]] |
-| `title` | `title` | `CharField` | NOT NULL |
-| `body` | `body` | `TextField` | blank |
-| `link` | `link` | `CharField` | blank |
+| `actor_id` | `actor` | `ForeignKey` | NULL, blank -> [[DB - accounts_user]] |
+| `action` | `action` | `CharField` | NOT NULL |
+| `entity_type` | `entity_type` | `CharField` | NOT NULL |
+| `entity_id` | `entity_id` | `CharField` | blank |
 | `work_order_id` | `work_order` | `ForeignKey` | NULL, blank -> [[DB - orders_workorder]] |
-| `read` | `read` | `BooleanField` | NOT NULL |
+| `details` | `details` | `TextField` | blank |
 | `created_at` | `created_at` | `DateTimeField` | blank |
 
 ## Riferimenti in uscita (FK)
@@ -32,8 +32,8 @@ tags:
 | Campo | Tabella collegata | ON DELETE |
 |---|---|---|
 | `workshop` | [[DB - workshops_workshop]] | `CASCADE` |
-| `user` | [[DB - accounts_user]] | `CASCADE` |
-| `work_order` | [[DB - orders_workorder]] | `CASCADE` |
+| `actor` | [[DB - accounts_user]] | `SET_NULL` |
+| `work_order` | [[DB - orders_workorder]] | `SET_NULL` |
 
 ## Navigazione
 

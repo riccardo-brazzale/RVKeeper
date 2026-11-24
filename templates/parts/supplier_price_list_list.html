@@ -1,0 +1,34 @@
+{% extends "base.html" %}
+{% load i18n %}
+{% block title %}Listini fornitori · RVKeeper{% endblock %}
+{% block content %}
+<div class="page-heading"><div><h2>Listini fornitori</h2><p>Listini salvati localmente e selezionati in base alla data dell'ordine.</p></div></div>
+<section class="panel">
+    <h3>Importa un listino CSV o Excel</h3>
+    {% if errors %}<div class="alert alert-error" role="alert"><strong>Rapporto di validazione</strong><ul>{% for error in errors %}<li>{{ error }}</li>{% endfor %}</ul></div>{% endif %}
+    <form method="post" enctype="multipart/form-data" action="{% url 'supplier_price_list_import' %}">
+        {% csrf_token %}
+        <div class="form-grid">
+            <div class="form-field"><label for="supplier">Fornitore</label><select id="supplier" name="supplier" required><option value="">Seleziona</option>{% for supplier in suppliers %}<option value="{{ supplier.pk }}">{{ supplier }}</option>{% endfor %}</select></div>
+            <div class="form-field"><label for="code">Codice listino</label><input id="code" name="code" maxlength="80" required></div>
+            <div class="form-field"><label for="name">Nome listino</label><input id="name" name="name" maxlength="160"></div>
+            <div class="form-field"><label for="valid_from">Valido dal</label><input id="valid_from" name="valid_from" type="date" required></div>
+            <div class="form-field"><label for="valid_to">Valido fino al</label><input id="valid_to" name="valid_to" type="date"></div>
+            <div class="form-field"><label for="file">File CSV o Excel (.xlsx)</label><input id="file" name="file" type="file" accept=".csv,.xlsx" required></div>
+        </div>
+        <p>Colonne richieste: <code>codice_articolo_fornitore</code>, <code>prezzo</code>. Colonne facoltative: <code>codice_interno</code>, <code>sconto</code>.</p>
+        <button type="submit">Valida e importa</button>
+    </form>
+</section>
+<section class="panel" style="margin-top:18px">
+    <h3>Listini salvati</h3>
+    {% if price_lists %}
+    <div class="table-wrap"><table>
+        <thead><tr><th>Fornitore</th><th>Codice</th><th>Nome</th><th>Validità</th><th>Righe</th><th>Stato</th></tr></thead>
+        <tbody>{% for price_list in price_lists %}
+        <tr><td>{{ price_list.supplier }}</td><td>{{ price_list.code }}</td><td>{{ price_list.name|default:"—" }}</td><td>{{ price_list.valid_from|date:"d/m/Y" }} – {{ price_list.valid_to|date:"d/m/Y"|default:"senza scadenza" }}</td><td>{{ price_list.items.count }}</td><td>{% if price_list.is_active %}Attivo{% else %}Disattivato{% endif %}</td></tr>
+        {% endfor %}</tbody>
+    </table></div>
+    {% else %}<p>Non sono ancora stati importati listini.</p>{% endif %}
+</section>
+{% endblock %}

@@ -1,0 +1,26 @@
+{% extends "base.html" %}
+{% load i18n %}
+{% block title %}Ordini fornitori · RVKeeper{% endblock %}
+{% block content %}
+<div class="page-heading">
+    <div><h2>Ordini fornitori aperti</h2><p>Ordini in attesa di ricezione o saldamento.</p></div>
+    <a class="button-link" href="{% url 'supplier_price_list_list' %}">Listini fornitori</a>
+</div>
+<section class="panel">
+    {% if purchase_orders %}
+    <div class="table-wrap"><table>
+        <thead><tr><th>Numero</th><th>Data</th><th>Fornitore</th><th>Stato</th><th>Righe</th><th>Azioni</th></tr></thead>
+        <tbody>{% for order in purchase_orders %}
+        <tr>
+            <td><a href="{% url 'purchase_order_detail' pk=order.pk %}">{{ order.order_number }}</a></td>
+            <td>{{ order.order_date|date:"d/m/Y" }}</td>
+            <td>{{ order.supplier }}</td>
+            <td>{{ order.get_status_display }}</td>
+            <td>{{ order.lines.count }}</td>
+            <td><a href="{% url 'purchase_order_pdf' pk=order.pk %}" target="_blank" rel="noopener">Stampa ordine</a></td>
+        </tr>
+        {% endfor %}</tbody>
+    </table></div>
+    {% else %}<p>Non ci sono ordini fornitori aperti.</p>{% endif %}
+</section>
+{% endblock %}

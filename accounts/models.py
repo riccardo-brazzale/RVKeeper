@@ -113,3 +113,29 @@ class User(AbstractUser):
 
     def __str__(self):
         return self.username
+
+
+class AuthenticationSettings(models.Model):
+    """Global authentication security settings managed from Django admin."""
+
+    idle_timeout_minutes = models.PositiveIntegerField(
+        default=15,
+        verbose_name=_("Inattivita consentita (minuti)"),
+    )
+    session_duration_hours = models.PositiveIntegerField(
+        default=10,
+        verbose_name=_("Durata massima sessione (ore)"),
+    )
+
+    class Meta:
+        verbose_name = _("Impostazioni di autenticazione")
+        verbose_name_plural = _("Impostazioni di autenticazione")
+
+    def save(self, *args, **kwargs):
+        self.pk = 1
+        super().save(*args, **kwargs)
+
+    @classmethod
+    def get_solo(cls):
+        settings_object, _ = cls.objects.get_or_create(pk=1)
+        return settings_object

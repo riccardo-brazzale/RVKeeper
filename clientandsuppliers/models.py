@@ -35,6 +35,10 @@ class CamperOwner(models.Model):
     city = models.CharField(max_length=100, blank=True, verbose_name="Città")
     country = models.CharField(max_length=2, default="IT", verbose_name="Paese")
     notes = models.TextField(blank=True, verbose_name="Note")
+    price_list = models.ForeignKey(
+        "orders.PriceList", on_delete=models.SET_NULL, null=True, blank=True,
+        related_name="customers", verbose_name="Listino generale assegnato",
+    )
     created_at = models.DateTimeField(auto_now_add=True)
 
     class Meta:
@@ -52,6 +56,28 @@ class CamperOwner(models.Model):
             raise ValidationError({"kind": "Questo contatto è usato da veicoli o ordini e deve restare cliente."})
         if self.pk and not self.is_supplier and self.part_offers.exists():
             raise ValidationError({"kind": "Questo contatto è associato a ricambi e deve restare fornitore."})
+        if self.price_list_id:
+            if not self.is_customer:
+                raise ValidationError({"price_list": "Solo un cliente può avere un listino assegnato."})
+            if self.workshop_id and self.price_list.workshop_id != self.workshop_id:
+                raise ValidationError({"price_list": "Il listino deve appartenere alla stessa officina."})
+            if self.price_list.customer_id and self.price_list.customer_id != self.pk:
+                raise ValidationError({"price_list": "Il listino cliente è riservato al cliente associato."})
+
+    def save(self, *args, **kwargs):
+        if self.is_customer and not self.price_list_id and self.workshop_id:
+            from orders.models import PriceList
+
+            default_list = PriceList.objects.filter(
+                workshop_id=self.workshop_id, is_default=True, is_active=True,
+            ).first()
+            if default_list is None:
+                raise ValidationError({"price_list": "L'officina non ha un listino CLIENTE attivo."})
+            self.price_list = default_list
+            update_fields = kwargs.get("update_fields")
+            if update_fields is not None:
+                kwargs["update_fields"] = {*update_fields, "price_list"}
+        super().save(*args, **kwargs)
 
     def __str__(self):
         return self.company_name if self.is_company else f"{self.first_name} {self.last_name}".strip()
@@ -59,6 +85,10 @@ class CamperOwner(models.Model):
     @property
     def customer_code(self):
         return f"CLI-{self.pk:06d}" if self.pk and self.is_customer else ""
+
+    @property
+    def supplier_code(self):
+        return f"FOR-{self.pk:06d}" if self.pk and self.is_supplier else ""
 
     @property
     def is_customer(self):
@@ -71,7 +101,7 @@ class CamperOwner(models.Model):
 
 class ContactDocument(models.Model):
     contact = models.ForeignKey(CamperOwner, on_delete=models.CASCADE, related_name="documents")
-    category = models.ForeignKey("fleet.DocumentCategory", on_delete=models.PROTECT, related_name="contact_documents")
+    category = models.ForeignKey("orders.DocumentCategory", on_delete=models.PROTECT, related_name="contact_documents")
     file = models.FileField(upload_to=contact_document_path)
     caption = models.CharField(max_length=250, blank=True)
     uploaded_by = models.ForeignKey("accounts.User", on_delete=models.SET_NULL, null=True, blank=True)

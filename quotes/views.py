@@ -7,9 +7,10 @@ from django.utils import timezone
 from django.utils.translation import gettext_lazy as _
 
 from clientandsuppliers.models import CamperOwner
-from fleet.models import AuditLog, Camper, PartsRequest
-from orders.models import Job, WorkOrder, next_ro_number
-from parts.models import Part
+from fleet.models import Camper
+from orders.models import AuditLog, Job, WorkOrder, next_ro_number
+from orders.pricing import resolve_item_price
+from parts.models import Part, PartsRequest
 from workshops.models import Membership, Workshop
 from .forms import QuoteForm, QuoteLineFormSet
 from .models import Quote
@@ -32,6 +33,26 @@ def _quote_number(workshop):
         sequence += 1
         number = f"PREV-{year}-{sequence:04d}"
     return number
+
+
+def _apply_line_pricing(line, customer):
+    if line.part_id:
+        pricing = resolve_item_price(customer, part=line.part)
+        if line.unit_price == 0 and pricing["unit_price"] is not None:
+            line.unit_price = pricing["unit_price"]
+        if line.discount_percent == 0:
+            line.discount_percent = pricing["discount_percent"]
+        if line.standard_minutes == 0:
+            line.standard_minutes = line.part.standard_minutes
+        line.unit = line.part.unit
+    elif line.labor_article_id:
+        pricing = resolve_item_price(customer, labor_article=line.labor_article)
+        if line.unit_price == 0 and pricing["unit_price"] is not None:
+            line.unit_price = pricing["unit_price"]
+        if line.discount_percent == 0:
+            line.discount_percent = pricing["discount_percent"]
+        line.unit = "h"
+    return line
 
 
 @login_required
@@ -63,13 +84,7 @@ def quote_create(request):
             quote.full_clean()
             quote.save()
             for line in line_formset.save(commit=False):
-                if line.part_id:
-                    line.description = line.description or line.part.name
-                    if line.unit_price == 0:
-                        line.unit_price = line.part.sale_price
-                    if line.standard_minutes == 0:
-                        line.standard_minutes = line.part.standard_minutes
-                    line.unit = line.part.unit
+                _apply_line_pricing(line, quote.customer)
                 line.quote = quote
                 line.save()
             messages.success(request, _("Quote %(number)s created.") % {"number": quote.quote_number})
@@ -94,13 +109,7 @@ def quote_edit(request, pk):
         quote_instance.full_clean()
         quote_instance.save()
         for line in line_formset.save(commit=False):
-            if line.part_id:
-                line.description = line.description or line.part.name
-                if line.unit_price == 0:
-                    line.unit_price = line.part.sale_price
-                if line.standard_minutes == 0:
-                    line.standard_minutes = line.part.standard_minutes
-                line.unit = line.part.unit
+            _apply_line_pricing(line, quote_instance.customer)
             line.quote = quote_instance
             line.save()
         for line in line_formset.deleted_objects:
@@ -188,6 +197,7 @@ def quote_to_order(request, pk):
                     custom_item="" if line.part_id else line.description,
                     unit=line.unit, quantity_requested=line.quantity,
                     notes=f"Da preventivo {quote.quote_number}", requested_by=request.user,
+                    customer_quoted_price=line.total if line.part_id else None,
                 )
             else:
                 job_number += 1
@@ -195,6 +205,7 @@ def quote_to_order(request, pk):
                     workshop=workshop, work_order=order, job_number=job_number,
                     title=line.description[:200], description=f"Preventivo {quote.quote_number}",
                     category="customer_pay", standard_minutes=line.standard_minutes,
+                    labor_article=line.labor_article,
                 )
         quote.work_order = order
         quote.save(update_fields=("work_order", "updated_at"))

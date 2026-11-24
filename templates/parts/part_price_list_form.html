@@ -1,0 +1,39 @@
+{% extends "base.html" %}
+{% load i18n %}
+{% block title %}{% translate "Manage prices" %} · {{ part.part_number }} · RVKeeper{% endblock %}
+{% block content %}
+<div class="page-heading">
+    <div>
+        <h2>{% translate "Manage prices" %}</h2>
+        <p>{{ part.part_number }} · {{ part.name }}</p>
+        <p>Imposta le versioni precedente, corrente e futura con le rispettive date di validità. Il listino Cliente e il listino Officine sono indipendenti; i listini cliente gestiscono solo sconti.</p>
+    </div>
+    <a class="button-link" href="{% url 'part_detail' pk=part.pk %}">{% translate "Back to part" %}</a>
+</div>
+<section class="panel">
+    <form method="post">
+        {% csrf_token %}
+        {% if form.non_field_errors %}<div class="form-errors">{{ form.non_field_errors }}</div>{% endif %}
+        <div class="table-wrap">
+            <table>
+                <thead><tr><th>Listino</th><th>Tipo</th><th>Prezzo precedente</th><th>Valido dal</th><th>Prezzo corrente</th><th>Valido dal</th><th>Prezzo futuro</th><th>Valido dal</th></tr></thead>
+                <tbody>
+                    {% for row in price_rows %}
+                        <tr>
+                            <td>{{ row.price_list.name }}</td>
+                            <td>{% if row.price_list.is_default %}Cliente{% elif row.price_list.is_workshop %}Officine{% else %}Generale{% endif %}</td>
+                            <td>{{ row.previous_price }}{% for error in row.previous_price.errors %}<div class="form-errors">{{ error }}</div>{% endfor %}</td>
+                            <td>{{ row.previous_date }}{% for error in row.previous_date.errors %}<div class="form-errors">{{ error }}</div>{% endfor %}</td>
+                            <td>{{ row.current_price }}{% for error in row.current_price.errors %}<div class="form-errors">{{ error }}</div>{% endfor %}</td>
+                            <td>{{ row.current_date }}{% for error in row.current_date.errors %}<div class="form-errors">{{ error }}</div>{% endfor %}</td>
+                            <td>{{ row.future_price }}{% for error in row.future_price.errors %}<div class="form-errors">{{ error }}</div>{% endfor %}</td>
+                            <td>{{ row.future_date }}{% for error in row.future_date.errors %}<div class="form-errors">{{ error }}</div>{% endfor %}</td>
+                        </tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+        </div>
+        <button type="submit">{% translate "Save prices" %}</button>
+    </form>
+</section>
+{% endblock %}

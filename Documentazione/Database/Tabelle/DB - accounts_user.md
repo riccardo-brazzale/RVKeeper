@@ -36,20 +36,20 @@ tags:
 ## Riferimenti in ingresso
 
 - [[DB - workshops_membership]]. Campo `user_id` (attributo `user`).
-- [[DB - fleet_partsrequest]]. Campo `requested_by_id` (attributo `requested_by`).
-- [[DB - fleet_partsrequest]]. Campo `delivered_by_id` (attributo `delivered_by`).
-- [[DB - fleet_warrantyclaim]]. Campo `requested_by_id` (attributo `requested_by`).
-- [[DB - fleet_warrantyclaim]]. Campo `decided_by_id` (attributo `decided_by`).
-- [[DB - fleet_warrantyreturn]]. Campo `decided_by_id` (attributo `decided_by`).
-- [[DB - fleet_warrantyreturn]]. Campo `requested_by_id` (attributo `requested_by`).
-- [[DB - fleet_jobnote]]. Campo `author_id` (attributo `author`).
-- [[DB - fleet_attachment]]. Campo `uploaded_by_id` (attributo `uploaded_by`).
-- [[DB - fleet_notification]]. Campo `user_id` (attributo `user`).
-- [[DB - fleet_timeevent]]. Campo `mechanic_id` (attributo `mechanic`).
-- [[DB - fleet_jobassignment]]. Campo `from_technician_id` (attributo `from_technician`).
-- [[DB - fleet_jobassignment]]. Campo `to_technician_id` (attributo `to_technician`).
-- [[DB - fleet_auditlog]]. Campo `actor_id` (attributo `actor`).
-- [[DB - fleet_jobparticipation]]. Campo `mechanic_id` (attributo `mechanic`).
+- [[DB - parts_partsrequest]]. Campo `requested_by_id` (attributo `requested_by`).
+- [[DB - parts_partsrequest]]. Campo `delivered_by_id` (attributo `delivered_by`).
+- [[DB - orders_warrantyclaim]]. Campo `requested_by_id` (attributo `requested_by`).
+- [[DB - orders_warrantyclaim]]. Campo `decided_by_id` (attributo `decided_by`).
+- [[DB - orders_warrantyreturn]]. Campo `decided_by_id` (attributo `decided_by`).
+- [[DB - orders_warrantyreturn]]. Campo `requested_by_id` (attributo `requested_by`).
+- [[DB - orders_jobnote]]. Campo `author_id` (attributo `author`).
+- [[DB - orders_attachment]]. Campo `uploaded_by_id` (attributo `uploaded_by`).
+- [[DB - orders_notification]]. Campo `user_id` (attributo `user`).
+- [[DB - orders_timeevent]]. Campo `mechanic_id` (attributo `mechanic`).
+- [[DB - orders_jobassignment]]. Campo `from_technician_id` (attributo `from_technician`).
+- [[DB - orders_jobassignment]]. Campo `to_technician_id` (attributo `to_technician`).
+- [[DB - orders_auditlog]]. Campo `actor_id` (attributo `actor`).
+- [[DB - orders_jobparticipation]]. Campo `mechanic_id` (attributo `mechanic`).
 - [[DB - clientandsuppliers_contactdocument]]. Campo `uploaded_by_id` (attributo `uploaded_by`).
 - [[DB - orders_workorder]]. Campo `invoiced_by_id` (attributo `invoiced_by`).
 - [[DB - orders_workorder]]. Campo `created_by_id` (attributo `created_by`).

@@ -1,20 +1,47 @@
 from decimal import Decimal
-from datetime import datetime
+from datetime import datetime, timedelta
 from io import BytesIO, StringIO
+from unittest.mock import patch
 
 from django.contrib.auth import get_user_model
 from django.core.management import call_command
-from django.test import TestCase
+from django.db import connection
+from django.db.migrations.executor import MigrationExecutor
+from django.test import TestCase, TransactionTestCase
 from django.urls import reverse
 from django.utils import timezone
 
 from clientandsuppliers.models import CamperOwner
-from orders.models import Job, PauseReason, WorkOrder
-from parts.models import Part, PartMovement
+from fleet.management.commands.populate_demo_data import generated_parts
+from orders.models import (
+    CustomerItemDiscount,
+    Job,
+    JobParticipation,
+    LaborArticle,
+    Notification,
+    PauseReason,
+    PriceList,
+    PriceListItem,
+    TimeEvent,
+    WorkOrder,
+)
+from orders.pricing import ensure_workshop_price_list, resolve_item_price, rotate_price_list_prices
+from parts.forms import PartForm
+from parts.models import (
+    JobPartUsage,
+    Part,
+    PartMovement,
+    PartsRequest,
+    TransferSlipLine,
+    WarehouseNote,
+    WarehouseNoteRead,
+)
+from quotes.models import QuoteLine
+from quotes.views import _apply_line_pricing
 from workshops.models import Membership, Workshop
 
 from .forms import CamperForm, WorkOrderForm
-from .models import Camper, JobPartUsage, JobParticipation, Notification, PartsRequest, TimeEvent
+from .models import Camper
 
 
 class PopulateDemoDataCommandTests(TestCase):
@@ -30,6 +57,28 @@ class PopulateDemoDataCommandTests(TestCase):
             "populate_demo_data",
             workshop=self.workshop.slug,
             stdout=StringIO(),
+        )
+
+    def test_command_prepares_customer_exceptions_without_assigning_them(self):
+        self._run_command()
+
+        customers = CamperOwner.objects.filter(
+            workshop=self.workshop,
+            kind__in=("customer", "both"),
+        )
+        self.assertFalse(customers.exclude(price_list__is_default=True).exists())
+        exception_lists = PriceList.objects.filter(
+            workshop=self.workshop,
+            customer__isnull=False,
+        )
+        self.assertEqual(exception_lists.count(), 3)
+        self.assertEqual(CustomerItemDiscount.objects.filter(customer__in=customers).count(), 9)
+        workshop_list = PriceList.objects.get(workshop=self.workshop, is_workshop=True)
+        self.assertFalse(PriceListItem.objects.filter(price_list=workshop_list).exists())
+        self.assertEqual(workshop_list.code, "OFFICINE")
+        self.assertEqual(
+            PriceList.objects.get(workshop=self.workshop, is_default=True).code,
+            "CLIENTE",
         )
 
     def test_command_populates_requested_counts_and_is_idempotent(self):
@@ -59,14 +108,21 @@ class PopulateDemoDataCommandTests(TestCase):
             7,
         )
         self.assertEqual(PartMovement.objects.filter(workshop=self.workshop).count(), 13)
-        demo_customer = CamperOwner.objects.get(
-            workshop=self.workshop,
-            email="emily.carter@contacts.example",
+        demo_customer = CamperOwner.objects.filter(
+            workshop=self.workshop, email__endswith="@contacts.example",
+        ).order_by("email").first()
+        self.assertIsNotNone(demo_customer)
+        original_demo_notes = demo_customer.notes
+        self.assertTrue(original_demo_notes)
+        demo_number, demo_name, demo_description, _, _, demo_price_value, *_ = next(generated_parts())
+        demo_part = Part.objects.get(workshop=self.workshop, part_number=demo_number)
+        demo_price = PriceListItem.objects.get(
+            price_list__workshop=self.workshop,
+            price_list__is_default=True,
+            part=demo_part,
         )
-        self.assertIn("Profilo demo fittizio", demo_customer.notes)
-        demo_part = Part.objects.get(workshop=self.workshop, part_number="DEMO-PART-001")
-        self.assertEqual(demo_part.sale_price, Decimal("14.16"))
-        self.assertIn("amsoil.com", demo_part.description)
+        self.assertEqual(demo_price.unit_price, Decimal(demo_price_value))
+        self.assertEqual(demo_part.description, demo_description)
         stock_before_rerun = dict(
             Part.objects.filter(workshop=self.workshop).values_list("pk", "quantity")
         )
@@ -74,15 +130,17 @@ class PopulateDemoDataCommandTests(TestCase):
         demo_customer.notes = "Old demo note"
         demo_customer.save(update_fields=("notes",))
         demo_part.name = "Old demo name"
-        demo_part.sale_price = Decimal("999.99")
-        demo_part.save(update_fields=("name", "sale_price"))
+        demo_part.save(update_fields=("name",))
+        demo_price.unit_price = Decimal("999.99")
+        demo_price.save(update_fields=("unit_price",))
         self._run_command()
 
         demo_customer.refresh_from_db()
         demo_part.refresh_from_db()
-        self.assertIn("Profilo demo fittizio", demo_customer.notes)
-        self.assertEqual(demo_part.name, "Engine oil filter")
-        self.assertEqual(demo_part.sale_price, Decimal("14.16"))
+        demo_price.refresh_from_db()
+        self.assertEqual(demo_customer.notes, original_demo_notes)
+        self.assertEqual(demo_part.name, demo_name)
+        self.assertEqual(demo_price.unit_price, Decimal(demo_price_value))
         self.assertEqual(Part.objects.filter(workshop=self.workshop).count(), 1000)
         self.assertEqual(WorkOrder.objects.filter(workshop=self.workshop).count(), 10)
         self.assertEqual(Job.objects.filter(workshop=self.workshop).count(), 30)
@@ -289,6 +347,201 @@ class JobPartsWorkflowTests(TestCase):
         )
         self.client.force_login(self.mechanic)
 
+    def test_new_customer_is_assigned_to_the_default_price_list(self):
+        self.assertIsNotNone(self.customer.price_list_id)
+        self.assertTrue(self.customer.price_list.is_default)
+
+    def test_customer_detail_displays_assigned_default_price_list(self):
+        self.client.force_login(self.reception_user)
+
+        response = self.client.get(reverse("customer_detail", args=(self.customer.pk,)))
+
+        self.assertContains(response, self.customer.price_list.name)
+        self.assertContains(response, "Listino assegnato:")
+        self.assertContains(
+            response,
+            f'href="{reverse("price_list_create")}?customer={self.customer.pk}"',
+        )
+        price_list_response = self.client.get(
+            f'{reverse("price_list_create")}?customer={self.customer.pk}'
+        )
+        self.assertEqual(price_list_response.status_code, 200)
+        self.assertEqual(
+            price_list_response.context["form"]["code"].value(),
+            self.customer.customer_code,
+        )
+        self.assertTrue(price_list_response.context["form"].fields["code"].disabled)
+        self.assertTrue(price_list_response.context["form"].fields["customer"].disabled)
+        discount_prefix = price_list_response.context["discount_formset"].prefix
+        save_response = self.client.post(
+            f'{reverse("price_list_create")}?customer={self.customer.pk}',
+            {
+                "name": f"Listino {self.customer}",
+                "is_active": "on",
+                f"{discount_prefix}-TOTAL_FORMS": "3",
+                f"{discount_prefix}-INITIAL_FORMS": "0",
+                f"{discount_prefix}-MIN_NUM_FORMS": "0",
+                f"{discount_prefix}-MAX_NUM_FORMS": "1000",
+                f"{discount_prefix}-0-part": str(self.part.pk),
+                f"{discount_prefix}-0-discount_percent": "10.00",
+            },
+        )
+        self.assertRedirects(save_response, reverse("customer_detail", args=(self.customer.pk,)))
+        price_list = PriceList.objects.get(workshop=self.workshop, customer=self.customer)
+        self.assertEqual(price_list.code, self.customer.customer_code)
+        self.customer.refresh_from_db()
+        self.assertEqual(self.customer.price_list_id, price_list.pk)
+        self.assertFalse(PriceListItem.objects.filter(price_list=price_list).exists())
+        self.assertEqual(
+            CustomerItemDiscount.objects.get(customer=self.customer, part=self.part).discount_percent,
+            Decimal("10.00"),
+        )
+
+    def test_price_rotation_skips_rows_without_future_price(self):
+        price_list = self.customer.price_list
+        today = timezone.localdate()
+        rotating = PriceListItem.objects.create(
+            price_list=price_list, part=self.part,
+            unit_price=Decimal("10.00"), valid_from=today,
+            future_price=Decimal("12.00"), future_valid_from=today + timedelta(days=30),
+        )
+        unchanged = PriceListItem.objects.create(
+            price_list=price_list, part=self.part2,
+            unit_price=Decimal("20.00"), valid_from=today,
+        )
+
+        rotated_count, skipped_count = rotate_price_list_prices(price_list)
+
+        self.assertEqual((rotated_count, skipped_count), (1, 1))
+        rotating.refresh_from_db()
+        unchanged.refresh_from_db()
+        self.assertEqual(rotating.previous_price, Decimal("10.00"))
+        self.assertEqual(rotating.unit_price, Decimal("12.00"))
+        self.assertIsNone(rotating.future_price)
+        self.assertEqual(unchanged.unit_price, Decimal("20.00"))
+        self.assertIsNone(unchanged.previous_price)
+
+    def test_price_resolution_uses_the_effective_date(self):
+        today = timezone.localdate()
+        PriceListItem.objects.create(
+            price_list=self.customer.price_list,
+            part=self.part,
+            previous_price=Decimal("80.00"),
+            previous_valid_from=today - timedelta(days=30),
+            unit_price=Decimal("100.00"),
+            valid_from=today,
+            future_price=Decimal("120.00"),
+            future_valid_from=today + timedelta(days=30),
+        )
+
+        before_current = resolve_item_price(
+            self.customer, part=self.part, effective_date=today - timedelta(days=1),
+        )
+        current = resolve_item_price(self.customer, part=self.part, effective_date=today)
+        future = resolve_item_price(
+            self.customer, part=self.part, effective_date=today + timedelta(days=30),
+        )
+
+        self.assertEqual(before_current["unit_price"], Decimal("80.00"))
+        self.assertEqual(current["unit_price"], Decimal("100.00"))
+        self.assertEqual(future["unit_price"], Decimal("120.00"))
+
+    def test_billing_prices_can_be_proposed_and_overridden_per_line(self):
+        today = timezone.localdate()
+        list_price = self.customer.price_list
+        labor_article = LaborArticle.objects.create(
+            workshop=self.workshop, code="LAB-1", description="Labor",
+        )
+        PriceListItem.objects.create(
+            price_list=list_price, part=self.part, unit_price=Decimal("100.00"), valid_from=today,
+        )
+        PriceListItem.objects.create(
+            price_list=list_price, labor_article=labor_article,
+            unit_price=Decimal("80.00"), valid_from=today,
+        )
+        CustomerItemDiscount.objects.create(
+            customer=self.customer, part=self.part, discount_percent=Decimal("10.00"),
+        )
+        CustomerItemDiscount.objects.create(
+            customer=self.customer, labor_article=labor_article, discount_percent=Decimal("10.00"),
+        )
+        self.work_order.status = "completed"
+        self.work_order.completed_at = timezone.now()
+        self.work_order.save(update_fields=("status", "completed_at"))
+        self.job.labor_article = labor_article
+        self.job.save(update_fields=("labor_article",))
+        request = PartsRequest.objects.create(
+            workshop=self.workshop, work_order=self.work_order, job=self.job, part=self.part,
+            quantity_requested=Decimal("1"), quantity_delivered=Decimal("1"),
+            status="delivered",
+        )
+        self.client.force_login(self.reception_user)
+
+        response = self.client.get(reverse("work_order_billing", args=(self.work_order.pk,)))
+
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(
+            response.context["parts_formset"].forms[0].proposed_price,
+            Decimal("90.00"),
+        )
+        self.assertEqual(
+            response.context["labor_formset"].forms[0].proposed_price,
+            Decimal("72.00"),
+        )
+        post_data = {
+            "parts-TOTAL_FORMS": "1",
+            "parts-INITIAL_FORMS": "1",
+            "parts-MIN_NUM_FORMS": "0",
+            "parts-MAX_NUM_FORMS": "1000",
+            "parts-0-id": str(request.pk),
+            "parts-0-invoice_unit_price_override": "87.50",
+            "labor-TOTAL_FORMS": "1",
+            "labor-INITIAL_FORMS": "1",
+            "labor-MIN_NUM_FORMS": "0",
+            "labor-MAX_NUM_FORMS": "1000",
+            "labor-0-id": str(self.job.pk),
+            "labor-0-invoice_hourly_rate_override": "70.00",
+            "usage-TOTAL_FORMS": "0",
+            "usage-INITIAL_FORMS": "0",
+            "usage-MIN_NUM_FORMS": "0",
+            "usage-MAX_NUM_FORMS": "1000",
+        }
+
+        save_response = self.client.post(
+            reverse("work_order_billing", args=(self.work_order.pk,)), post_data,
+        )
+
+        self.assertRedirects(save_response, reverse("work_order_billing", args=(self.work_order.pk,)))
+        request.refresh_from_db()
+        self.job.refresh_from_db()
+        self.assertEqual(request.invoice_unit_price_override, Decimal("87.50"))
+        self.assertEqual(self.job.invoice_hourly_rate_override, Decimal("70.00"))
+        with patch("orders.views.resolve_item_price") as resolve_price:
+            pdf_response = self.client.post(
+                reverse("work_order_report", args=(self.work_order.pk,)),
+                {"mark_invoiced": "0"},
+            )
+        self.assertEqual(pdf_response["Content-Type"], "application/pdf")
+        resolve_price.assert_not_called()
+
+    def test_customer_part_discount_is_applied_to_quotes(self):
+        PriceListItem.objects.create(
+            price_list=self.customer.price_list,
+            part=self.part,
+            unit_price=Decimal("100.00"),
+            valid_from=timezone.localdate(),
+        )
+        CustomerItemDiscount.objects.create(
+            customer=self.customer, part=self.part, discount_percent=Decimal("15.00"),
+        )
+        line = QuoteLine(part=self.part, unit_price=Decimal("0.00"))
+
+        _apply_line_pricing(line, self.customer)
+
+        self.assertEqual(line.unit_price, Decimal("100.00"))
+        self.assertEqual(line.discount_percent, Decimal("15.00"))
+        self.assertEqual(line.total, Decimal("85.00"))
+
     def _request_payload(self, rows):
         prefix = f"parts-{self.job.pk}"
         payload = {
@@ -357,8 +610,8 @@ class JobPartsWorkflowTests(TestCase):
         self.assertIsNone(notification.user_id)
 
     def test_expensive_part_request_requires_customer_and_reception_approval(self):
-        self.part.sale_price = Decimal("150.00")
-        self.part.save(update_fields=("sale_price",))
+        price_list = self.customer.price_list
+        PriceListItem.objects.create(price_list=price_list, part=self.part, unit_price=Decimal("150.00"))
 
         self.client.post(
             reverse("job_parts_request", args=(self.job.pk,)),
@@ -395,6 +648,174 @@ class JobPartsWorkflowTests(TestCase):
         item.refresh_from_db()
         self.assertEqual(item.status, "preparing")
 
+    def test_catalogs_have_no_price_fields_and_unlisted_items_have_no_fallback_price(self):
+        self.assertNotIn("sale_price", PartForm(workshop=self.workshop).fields)
+        self.assertNotIn("sale_price", {field.name for field in Part._meta.fields})
+        self.assertNotIn("hourly_rate", {field.name for field in LaborArticle._meta.fields})
+
+        pricing = resolve_item_price(self.customer, part=self.part)
+
+        self.assertIsNone(pricing["unit_price"])
+        self.assertIsNone(pricing["total_unit_price"])
+
+        self.client.force_login(self.reception_user)
+        part_response = self.client.get(reverse("part_create"))
+        labor_response = self.client.get(reverse("price_list_edit", args=(self.customer.price_list_id,)))
+
+        self.assertNotIn("sale_price", part_response.context["form"].fields)
+        self.assertContains(labor_response, "Nuovi codici manodopera")
+        self.assertContains(labor_response, "Current price")
+        self.assertNotContains(labor_response, "Labor articles")
+        self.assertEqual(self.client.get("/ordini/articoli-manodopera/").status_code, 404)
+
+    def test_customer_price_resolution_uses_workshop_then_default_fallback(self):
+        default_list = self.customer.price_list
+        PriceListItem.objects.create(price_list=default_list, part=self.part, unit_price=Decimal("100.00"))
+        PriceListItem.objects.create(price_list=default_list, part=self.part2, unit_price=Decimal("50.00"))
+        workshop_list = ensure_workshop_price_list(self.workshop)
+        PriceListItem.objects.create(price_list=workshop_list, part=self.part2, unit_price=Decimal("40.00"))
+        self.assertEqual(resolve_item_price(self.customer, part=self.part)["unit_price"], Decimal("100.00"))
+        customer_list = PriceList.objects.create(
+            workshop=self.workshop,
+            code=self.customer.customer_code,
+            name="Eccezioni Ada",
+            customer=self.customer,
+        )
+        self.customer.price_list = customer_list
+        self.customer.save(update_fields=("price_list",))
+
+        CustomerItemDiscount.objects.create(
+            customer=self.customer, part=self.part, discount_percent=Decimal("15.00"),
+        )
+        self.assertEqual(resolve_item_price(self.customer, part=self.part)["unit_price"], Decimal("100.00"))
+        self.assertEqual(resolve_item_price(self.customer, part=self.part)["total_unit_price"], Decimal("85.00"))
+        self.assertEqual(resolve_item_price(self.customer, part=self.part2)["unit_price"], Decimal("40.00"))
+        default_item = PriceListItem.objects.get(price_list=default_list, part=self.part)
+        default_item.unit_price = Decimal("200.00")
+        default_item.save(update_fields=("unit_price",))
+        self.assertEqual(resolve_item_price(self.customer, part=self.part)["total_unit_price"], Decimal("170.00"))
+
+    def test_labor_code_can_be_created_from_default_price_list(self):
+        self.client.force_login(self.reception_user)
+        default_list = self.customer.price_list
+        response = self.client.get(reverse("price_list_edit", args=(default_list.pk,)))
+        item_prefix = response.context["item_formset"].prefix
+
+        payload = {
+            "code": default_list.code,
+            "name": default_list.name,
+            "customer": "",
+            "is_active": "on",
+            f"{item_prefix}-TOTAL_FORMS": "5",
+            f"{item_prefix}-INITIAL_FORMS": "0",
+            "labor_codes-TOTAL_FORMS": "2",
+            "labor_codes-INITIAL_FORMS": "0",
+            "labor_codes-0-code": "LAB-001",
+            "labor_codes-0-description": "Manodopera standard",
+            "labor_codes-0-tariff_type": "standard",
+            "labor_codes-0-unit_price": "50.00",
+            "labor_codes-0-valid_from": timezone.localdate().isoformat(),
+        }
+
+        save_response = self.client.post(
+            reverse("price_list_edit", args=(default_list.pk,)),
+            payload,
+        )
+
+        self.assertEqual(save_response.status_code, 302)
+        article = LaborArticle.objects.get(workshop=self.workshop, code="LAB-001")
+        self.assertEqual(
+            PriceListItem.objects.get(price_list=default_list, labor_article=article).unit_price,
+            Decimal("50.00"),
+        )
+        workshop_list = PriceList.objects.get(workshop=self.workshop, is_workshop=True)
+        self.assertFalse(
+            PriceListItem.objects.filter(price_list=workshop_list, labor_article=article).exists()
+        )
+
+    def test_customer_price_list_is_assigned_when_created_with_exceptions(self):
+        self.client.force_login(self.reception_user)
+        url = f'{reverse("price_list_create")}?customer={self.customer.pk}'
+        response = self.client.get(url)
+        discount_prefix = response.context["discount_formset"].prefix
+        payload = {
+            "name": "Eccezioni Ada",
+            "is_active": "on",
+            f"{discount_prefix}-TOTAL_FORMS": "3",
+            f"{discount_prefix}-INITIAL_FORMS": "0",
+            f"{discount_prefix}-MIN_NUM_FORMS": "0",
+            f"{discount_prefix}-MAX_NUM_FORMS": "1000",
+            f"{discount_prefix}-0-part": str(self.part.pk),
+            f"{discount_prefix}-0-discount_percent": "15.00",
+        }
+
+        save_response = self.client.post(url, payload)
+
+        self.assertRedirects(save_response, reverse("customer_detail", args=(self.customer.pk,)))
+        price_list = PriceList.objects.get(workshop=self.workshop, code=self.customer.customer_code)
+        self.customer.refresh_from_db()
+        self.assertEqual(self.customer.price_list_id, price_list.pk)
+        self.assertFalse(PriceListItem.objects.filter(price_list=price_list).exists())
+        discount = CustomerItemDiscount.objects.get(customer=self.customer, part=self.part)
+        self.assertEqual(discount.discount_percent, Decimal("15.00"))
+        detail_response = self.client.get(reverse("customer_detail", args=(self.customer.pk,)))
+        self.assertContains(
+            detail_response,
+            f'href="{reverse("price_list_edit", args=(price_list.pk,))}">Prezzi personalizzati',
+        )
+
+    def test_part_price_page_updates_default_and_regenerates_workshop(self):
+        response = self.client.get(reverse("part_price_lists", args=(self.part.pk,)))
+        self.assertEqual(response.status_code, 403)
+        self.client.force_login(self.reception_user)
+
+        response = self.client.get(reverse("part_price_lists", args=(self.part.pk,)))
+        default_list = PriceList.objects.get(workshop=self.workshop, is_default=True)
+        default_fields = response.context["form"].field_names[default_list.pk]["current"]
+        workshop_list = PriceList.objects.get(workshop=self.workshop, is_workshop=True)
+        workshop_fields = response.context["form"].field_names[workshop_list.pk]["current"]
+        self.assertContains(response, "Listino Officine")
+
+        save_response = self.client.post(
+            reverse("part_price_lists", args=(self.part.pk,)),
+            {
+                default_fields["price"]: "100.00",
+                default_fields["date"]: timezone.localdate().isoformat(),
+                workshop_fields["price"]: "42.00",
+                workshop_fields["date"]: timezone.localdate().isoformat(),
+            },
+        )
+
+        self.assertEqual(save_response.status_code, 302)
+        self.assertEqual(
+            PriceListItem.objects.get(price_list=default_list, part=self.part).unit_price,
+            Decimal("100.00"),
+        )
+        self.assertEqual(
+            PriceListItem.objects.get(price_list=workshop_list, part=self.part).unit_price,
+            Decimal("42.00"),
+        )
+        response = self.client.get(reverse("part_price_lists", args=(self.part.pk,)))
+        default_fields = response.context["form"].field_names[default_list.pk]["current"]
+        workshop_fields = response.context["form"].field_names[workshop_list.pk]["current"]
+        self.client.post(
+            reverse("part_price_lists", args=(self.part.pk,)),
+            {
+                default_fields["price"]: "125.00",
+                default_fields["date"]: timezone.localdate().isoformat(),
+                workshop_fields["price"]: "42.00",
+                workshop_fields["date"]: timezone.localdate().isoformat(),
+            },
+        )
+        self.assertEqual(
+            PriceListItem.objects.get(price_list=workshop_list, part=self.part).unit_price,
+            Decimal("42.00"),
+        )
+        detail_response = self.client.get(reverse("part_detail", args=(self.part.pk,)))
+        self.assertContains(detail_response, "Manage prices")
+        self.assertContains(detail_response, "125.00")
+        self.assertContains(detail_response, "42.00")
+
     def test_warehouse_hold_notifies_the_requesting_mechanic(self):
         item = PartsRequest.objects.create(
             workshop=self.workshop,
@@ -419,6 +840,108 @@ class JobPartsWorkflowTests(TestCase):
             ).exists()
         )
 
+    def test_warehouse_reminder_cannot_be_resent_until_answered(self):
+        item = PartsRequest.objects.create(
+            workshop=self.workshop,
+            work_order=self.work_order,
+            job=self.job,
+            part=self.part,
+            quantity_requested=Decimal("1"),
+            requested_by=self.mechanic,
+            status="pending",
+        )
+        remind_url = reverse("parts_request_action", args=(item.pk, "remind"))
+
+        self.client.post(remind_url)
+
+        item.refresh_from_db()
+        first_reminder_at = item.warehouse_reminder_sent_at
+        self.assertIsNotNone(first_reminder_at)
+        self.assertTrue(item.warehouse_reminder_pending)
+        self.assertEqual(
+            Notification.objects.filter(
+                user=self.parts_user, title="Warehouse reminder", work_order=self.work_order
+            ).count(),
+            1,
+        )
+
+        self.client.post(remind_url)
+
+        item.refresh_from_db()
+        self.assertEqual(item.warehouse_reminder_sent_at, first_reminder_at)
+        self.assertEqual(
+            Notification.objects.filter(
+                user=self.parts_user, title="Warehouse reminder", work_order=self.work_order
+            ).count(),
+            1,
+        )
+
+        self.client.force_login(self.parts_user)
+        self.client.post(
+            reverse("parts_request_action", args=(item.pk, "estimate")),
+            {"eta_kind": "stock", "eta_value": "25"},
+        )
+
+        item.refresh_from_db()
+        self.assertEqual(item.warehouse_eta_kind, "stock")
+        self.assertEqual(item.warehouse_eta_value, 25)
+        self.assertEqual(item.warehouse_eta_updated_by, self.parts_user)
+        self.assertGreaterEqual(
+            item.warehouse_reminder_answered_at, first_reminder_at
+        )
+        self.assertFalse(item.warehouse_reminder_pending)
+        self.assertTrue(
+            Notification.objects.filter(
+                user=self.mechanic,
+                title="Warehouse delivery estimate",
+                body__contains="25 minutes",
+                work_order=self.work_order,
+            ).exists()
+        )
+
+        self.client.force_login(self.mechanic)
+        self.client.post(remind_url)
+
+        item.refresh_from_db()
+        self.assertGreater(
+            item.warehouse_reminder_sent_at, item.warehouse_reminder_answered_at
+        )
+        self.assertTrue(item.warehouse_reminder_pending)
+
+    def test_supplier_estimate_is_displayed_in_days(self):
+        item = PartsRequest.objects.create(
+            workshop=self.workshop,
+            work_order=self.work_order,
+            job=self.job,
+            part=self.part,
+            quantity_requested=Decimal("1"),
+            requested_by=self.mechanic,
+            status="pending",
+        )
+        self.client.force_login(self.parts_user)
+
+        self.client.post(
+            reverse("parts_request_action", args=(item.pk, "estimate")),
+            {"eta_kind": "supplier", "eta_value": "3"},
+        )
+
+        item.refresh_from_db()
+        self.assertEqual(item.warehouse_eta_kind, "supplier")
+        self.assertEqual(item.warehouse_eta_value, 3)
+        self.assertTrue(
+            Notification.objects.filter(
+                user=self.mechanic,
+                title="Warehouse delivery estimate",
+                body__contains="3 days",
+                work_order=self.work_order,
+            ).exists()
+        )
+
+        self.client.force_login(self.mechanic)
+        response = self.client.get(reverse("my_jobs"))
+
+        self.assertContains(response, "Estimated delivery: 3 days")
+
     def test_mechanic_without_active_session_cannot_request_parts(self):
         self.participation.is_active = False
         self.participation.save(update_fields=("is_active",))
@@ -431,6 +954,14 @@ class JobPartsWorkflowTests(TestCase):
         self.assertEqual(response.status_code, 403)
         self.assertFalse(PartsRequest.objects.exists())
 
+    def test_job_actions_require_authentication(self):
+        self.client.logout()
+
+        response = self.client.post(reverse("job_action", args=(self.job.pk, "start")))
+
+        self.assertEqual(response.status_code, 302)
+        self.assertIn(reverse("login"), response.url)
+
     def test_technician_can_see_dashboard_link_and_personal_dashboard(self):
         response = self.client.get(reverse("home"))
 
@@ -438,6 +969,83 @@ class JobPartsWorkflowTests(TestCase):
         self.assertContains(response, 'class="sidebar-dashboard"')
         self.assertContains(response, "My active sessions")
         self.assertContains(response, self.job.title)
+
+    def test_mechanic_can_open_one_activity_for_an_order_without_activities(self):
+        order = WorkOrder.objects.create(
+            workshop=self.workshop,
+            vehicle=self.camper,
+            customer=self.customer,
+            ro_number="RO-TEST-2",
+        )
+
+        response = self.client.post(
+            reverse("mechanic_open_job", args=(order.pk,)),
+            {"title": "Controllo freni", "description": "Verifica iniziale"},
+        )
+
+        activity = Job.objects.get(work_order=order)
+        self.assertEqual(response.status_code, 302)
+        self.assertEqual(activity.job_number, 1)
+        self.assertEqual(activity.title, "Controllo freni")
+        self.assertRedirects(
+            response,
+            f'{reverse("work_order_detail", args=(order.pk,))}#job-{activity.pk}',
+            fetch_redirect_response=False,
+        )
+        detail_response = self.client.get(reverse("work_order_detail", args=(order.pk,)))
+        self.assertContains(detail_response, f"{order.ro_number}-01")
+
+    def test_mechanic_cannot_open_another_activity_for_an_order_with_one(self):
+        response = self.client.post(
+            reverse("mechanic_open_job", args=(self.work_order.pk,)),
+            {"title": "Attività duplicata"},
+        )
+
+        self.assertEqual(response.status_code, 302)
+        self.assertEqual(Job.objects.filter(work_order=self.work_order).count(), 1)
+
+    def test_mechanic_cannot_advance_order_with_open_activity(self):
+        response = self.client.post(
+            reverse("order_status", args=(self.work_order.pk,)),
+            {"status": "ready_inspection"},
+        )
+
+        self.assertEqual(response.status_code, 302)
+        self.work_order.refresh_from_db()
+        self.assertEqual(self.work_order.status, "open")
+
+    def test_opening_work_order_marks_warehouse_notes_read(self):
+        another_mechanic = get_user_model().objects.create_user(
+            "another-mechanic",
+            "another-mechanic@example.test",
+            "password",
+            profile="mechanic",
+        )
+        Membership.objects.create(user=another_mechanic, workshop=self.workshop)
+        note = WarehouseNote.objects.create(
+            workshop=self.workshop,
+            work_order=self.work_order,
+            part=self.part,
+            author=self.parts_user,
+            text="Ricambio non disponibile.",
+        )
+        read_receipt = WarehouseNoteRead.objects.create(
+            note=note,
+            recipient=self.mechanic,
+        )
+        unread_receipt = WarehouseNoteRead.objects.create(
+            note=note,
+            recipient=another_mechanic,
+        )
+
+        response = self.client.get(reverse("work_order_detail", args=(self.work_order.pk,)))
+
+        self.assertEqual(response.status_code, 200)
+        self.assertContains(response, "Ricambio non disponibile.")
+        read_receipt.refresh_from_db()
+        unread_receipt.refresh_from_db()
+        self.assertIsNotNone(read_receipt.read_at)
+        self.assertIsNone(unread_receipt.read_at)
 
     def test_orders_menu_lists_work_orders_before_quotes(self):
         office_user = get_user_model().objects.create_user(
@@ -518,7 +1126,7 @@ class JobPartsWorkflowTests(TestCase):
         self.assertIsNone(self.participation.paused_at)
         self.assertFalse(TimeEvent.objects.filter(job=self.job, event_type="pause").exists())
 
-    def test_finish_session_records_additional_stock_usage_atomically(self):
+    def test_finish_session_reserves_stock_without_deducting_until_order_closure(self):
         response = self.client.post(
             reverse("job_complete", args=(self.job.pk,)),
             self._completion_payload([{"part": str(self.part.pk), "quantity": "3"}]),
@@ -528,13 +1136,13 @@ class JobPartsWorkflowTests(TestCase):
         self.part.refresh_from_db()
         self.participation.refresh_from_db()
         self.job.refresh_from_db()
-        self.assertEqual(self.part.quantity, Decimal("7"))
+        self.assertEqual(self.part.quantity, Decimal("10"))
         self.assertFalse(self.participation.is_active)
         self.assertEqual(self.job.status, "completed")
-        self.assertEqual(JobPartUsage.objects.get().quantity_used, Decimal("3"))
-        movement = PartMovement.objects.get()
-        self.assertEqual(movement.movement_type, "out")
-        self.assertEqual(movement.quantity, Decimal("3"))
+        transfer_line = TransferSlipLine.objects.get(part=self.part, job=self.job)
+        self.assertEqual(transfer_line.quantity_reserved, Decimal("3"))
+        self.assertFalse(JobPartUsage.objects.exists())
+        self.assertFalse(PartMovement.objects.exists())
         self.assertTrue(TimeEvent.objects.filter(job=self.job, event_type="finish").exists())
 
     def test_finish_session_requires_confirmation_even_when_no_parts_were_used(self):
@@ -612,3 +1220,83 @@ class JobPartsWorkflowTests(TestCase):
         self.assertEqual(response.status_code, 200)
         self.assertEqual(response["Content-Type"], "application/pdf")
         self.assertTrue(response.content.startswith(b"%PDF"))
+
+
+class WorkflowModelOwnershipMigrationTests(TransactionTestCase):
+    migrate_from = [
+        ("clientandsuppliers", "0005_camperowner_price_list"),
+        ("fleet", "0009_warehousenote_warehousenoteread_and_more"),
+        ("orders", "0016_alter_job_status_alter_workorder_status"),
+        ("parts", "0008_alter_purchaseorder_options"),
+    ]
+    migrate_to = [
+        ("clientandsuppliers", "0006_alter_contactdocument_category"),
+        ("fleet", "0010_move_workflow_models"),
+        ("orders", "0018_warrantyreturn_parts_request_and_more"),
+        ("parts", "0009_alter_partdocument_category_partsrequest_and_more"),
+    ]
+
+    def _migrate(self, targets):
+        executor = MigrationExecutor(connection)
+        executor.migrate(targets)
+        return executor.loader.project_state(targets).apps
+
+    def setUp(self):
+        super().setUp()
+        old_apps = self._migrate(self.migrate_from)
+        old_category_model = old_apps.get_model("fleet", "DocumentCategory")
+        self.category = old_category_model.objects.create(
+            code="migration-check",
+            name="Migration check",
+        )
+        content_type_model = old_apps.get_model("contenttypes", "ContentType")
+        permission_model = old_apps.get_model("auth", "Permission")
+        content_type = content_type_model.objects.get(
+            app_label="fleet",
+            model="documentcategory",
+        )
+        self.permission = permission_model.objects.create(
+            name="Can verify migrated category",
+            codename="verify_migrated_category",
+            content_type=content_type,
+        )
+        self.category_id = self.category.pk
+        self.content_type_id = content_type.pk
+        self.permission_id = self.permission.pk
+        self._migrate(self.migrate_to)
+
+    def tearDown(self):
+        executor = MigrationExecutor(connection)
+        executor.migrate(executor.loader.graph.leaf_nodes())
+        super().tearDown()
+
+    def test_table_data_and_permission_content_type_survive_forward_and_reverse(self):
+        apps = self._migrate(self.migrate_to)
+        category_model = apps.get_model("orders", "DocumentCategory")
+        content_type_model = apps.get_model("contenttypes", "ContentType")
+        permission_model = apps.get_model("auth", "Permission")
+
+        self.assertEqual(category_model._meta.db_table, "orders_documentcategory")
+        self.assertTrue(category_model.objects.filter(pk=self.category_id).exists())
+        moved_type = content_type_model.objects.get(pk=self.content_type_id)
+        self.assertEqual((moved_type.app_label, moved_type.model), ("orders", "documentcategory"))
+        self.assertTrue(
+            permission_model.objects.filter(
+                pk=self.permission_id,
+                content_type_id=self.content_type_id,
+            ).exists()
+        )
+
+        old_apps = self._migrate(self.migrate_from)
+        old_category_model = old_apps.get_model("fleet", "DocumentCategory")
+        self.assertEqual(old_category_model._meta.db_table, "fleet_documentcategory")
+        self.assertTrue(old_category_model.objects.filter(pk=self.category_id).exists())
+        restored_type = old_apps.get_model("contenttypes", "ContentType").objects.get(
+            pk=self.content_type_id
+        )
+        self.assertEqual((restored_type.app_label, restored_type.model), ("fleet", "documentcategory"))
+
+        apps = self._migrate(self.migrate_to)
+        self.assertTrue(
+            apps.get_model("orders", "DocumentCategory").objects.filter(pk=self.category_id).exists()
+        )

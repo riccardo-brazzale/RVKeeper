@@ -24,7 +24,6 @@ tags:
 | `description` | `description` | `TextField` | blank |
 | `unit` | `unit` | `CharField` | NOT NULL |
 | `cost_price` | `cost_price` | `DecimalField` | NOT NULL |
-| `sale_price` | `sale_price` | `DecimalField` | NOT NULL |
 | `standard_minutes` | `standard_minutes` | `PositiveIntegerField` | NOT NULL |
 | `quantity` | `quantity` | `DecimalField` | NOT NULL |
 | `min_stock` | `min_stock` | `DecimalField` | NOT NULL |
@@ -40,7 +39,7 @@ tags:
 
 ## Riferimenti in ingresso
 
-- [[DB - fleet_partsrequest]]. Campo `part_id` (attributo `part`).
+- [[DB - parts_partsrequest]]. Campo `part_id` (attributo `part`).
 - [[DB - parts_partsupplieroffer]]. Campo `part_id` (attributo `part`).
 - [[DB - parts_partdocument]]. Campo `part_id` (attributo `part`).
 - [[DB - parts_partmovement]]. Campo `part_id` (attributo `part`).

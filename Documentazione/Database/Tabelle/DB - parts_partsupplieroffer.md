@@ -37,7 +37,7 @@ tags:
 
 ## Riferimenti in ingresso
 
-- [[DB - fleet_partsrequest]]. Campo `supplier_offer_id` (attributo `supplier_offer`).
+- [[DB - parts_partsrequest]]. Campo `supplier_offer_id` (attributo `supplier_offer`).
 
 ## Vincoli applicativi/database
 

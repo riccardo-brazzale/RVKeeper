@@ -33,6 +33,7 @@ tags:
 | `city` | `city` | `CharField` | blank |
 | `country` | `country` | `CharField` | NOT NULL |
 | `notes` | `notes` | `TextField` | blank |
+| `price_list_id` | `price_list` | `ForeignKey` | NULL -> [[DB - orders_pricelist]]; listino assegnato al cliente |
 | `created_at` | `created_at` | `DateTimeField` | blank |
 
 ## Riferimenti in uscita (FK)
@@ -40,6 +41,7 @@ tags:
 | Campo | Tabella collegata | ON DELETE |
 |---|---|---|
 | `workshop` | [[DB - workshops_workshop]] | `CASCADE` |
+| `price_list` | [[DB - orders_pricelist]] | `SET_NULL` |
 
 ## Riferimenti in ingresso
 

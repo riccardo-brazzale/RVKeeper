@@ -7,14 +7,14 @@
         <h2>{{ order.ro_number }} · {{ order.get_status_display }}</h2>
         <p>{{ order.vehicle|default:_('Vehicle') }} · {{ order.customer|default:order.customer_name|default:"—" }}</p>
     </div>
-    {% if order.vehicle_id %}<a class="button-link" href="{% url 'fleet:camper_detail' pk=order.vehicle_id %}">{% translate "Vehicle" %}</a>{% else %}<a class="button-link" href="{% url 'orders' %}">{% translate "Work orders" %}</a>{% endif %}
+    <div class="actions">{% if user.profile == 'admin' and order.status == 'completed' %}<a class="button-link" href="{% url 'work_order_billing' pk=order.pk %}">{% translate "Billing prices" %}</a>{% endif %}{% if user.profile == 'admin' %}<a class="button-link" href="{% url 'fleet:workflow_edit' module='orders' pk=order.pk %}">{% translate "Edit work order" %}</a>{% endif %}{% if order.vehicle_id %}<a class="button-link" href="{% url 'fleet:camper_detail' pk=order.vehicle_id %}">{% translate "Vehicle" %}</a>{% else %}<a class="button-link" href="{% url 'orders' %}">{% translate "Work orders" %}</a>{% endif %}</div>
 </div>
 
 <section class="summary-grid">
     <article class="panel"><strong>{% translate "Work order" %}</strong><p>{{ order.ro_number }}</p><strong>{% translate "Date" %}</strong><p>{{ order.created_at|date:"d/m/Y H:i" }}</p></article>
     <article class="panel"><strong>{% translate "Customer" %}</strong><p>{{ order.customer|default:order.customer_name|default:"—" }}</p><strong>{% translate "Phone" %}</strong><p>{{ order.customer.phone|default:order.customer_phone|default:"—" }}</p></article>
     <article class="panel"><strong>{% translate "Vehicle" %}</strong><p>{{ order.vehicle.brand }} {{ order.vehicle.model }}</p><strong>{% translate "Mileage" %}</strong><p>{{ order.odometer|default:"—" }} km</p></article>
-    <article class="panel"><strong>{% translate "Status" %}</strong><p>{{ order.get_status_display }}</p><strong>{% translate "Work classification" %}</strong><p>{{ order.get_work_classification_display }}</p><strong>Tariffa manodopera</strong><p>{{ order.get_tariff_type_display }}</p><strong>{% translate "Warranty status" %}</strong><p>{{ order.get_warranty_status_display }}</p><strong>{% translate "Invoicing" %}</strong><p>{% if order.invoiced %}{% translate "Invoiced" %}{% else %}{% translate "Not invoiced" %}{% endif %}</p></article>
+    <article class="panel"><strong>{% translate "Status" %}</strong><p>{{ order.get_status_display }}</p><strong>{% translate "Work classification" %}</strong><p>{{ order.get_work_classification_display }}</p><strong>{% translate "Warranty status" %}</strong><p>{{ order.get_warranty_status_display }}</p><strong>{% translate "Invoicing" %}</strong><p>{% if order.invoiced %}{% translate "Invoiced" %}{% else %}{% translate "Not invoiced" %}{% endif %}</p></article>
 </section>
 
 <section class="panel" style="margin-top:18px">
@@ -28,9 +28,18 @@
 
 <section class="panel" style="margin-top:18px">
     <h3>{% translate "Jobs and technicians" %}</h3>
+    {% if user.profile == "mechanic" and not jobs and order.status == "open" or user.profile == "mechanic" and not jobs and order.status == "in_progress" %}
+    <form method="post" action="{% url 'mechanic_open_job' order_pk=order.pk %}" class="form-grid" style="margin:12px 0">
+        {% csrf_token %}
+        <div class="form-field"><label for="activity-title">Descrizione attività</label><input id="activity-title" name="title" maxlength="200" required></div>
+        <div class="form-field"><label for="activity-description">Dettagli</label><textarea id="activity-description" name="description" rows="2"></textarea></div>
+        <button type="submit">Apri attività</button>
+    </form>
+    {% endif %}
     {% for job in jobs %}
-        <article style="padding:12px 0;border-bottom:1px solid #d8e0e8">
-            <strong>{{ job.job_number }} · {{ job.title }}</strong> · {{ job.get_status_display }}
+        <article class="job-anchor" id="job-{{ job.pk }}" style="padding:12px 0;border-bottom:1px solid #d8e0e8">
+            <div class="page-heading"><strong>{{ order.ro_number }}-{{ job.job_number|stringformat:"02d" }} · {{ job.title }}</strong>{% if user.profile == 'admin' %}<a href="{% url 'fleet:workflow_edit' module='jobs' pk=job.pk %}">{% translate "Manage job" %}</a>{% endif %}</div>
+            {{ job.get_status_display }}
             {% if job.description %}<p>{{ job.description|linebreaksbr }}</p>{% endif %}
             <p>{% if LANGUAGE_CODE == 'it' %}Reparto{% elif LANGUAGE_CODE == 'es' %}Departamento{% else %}{% translate "Department" %}{% endif %}: {{ job.get_department_display }} · {% if LANGUAGE_CODE == 'it' %}Specialità{% elif LANGUAGE_CODE == 'es' %}Especialidad{% else %}{% translate "Specialty" %}{% endif %}: {{ job.get_specialty_display }} · {% if LANGUAGE_CODE == 'it' %}Durata{% elif LANGUAGE_CODE == 'es' %}Duración{% else %}{% translate "Duration" %}{% endif %}: {{ job.actual_minutes }} min{% if job.labor_article %} · Articolo: {{ job.labor_article }}{% endif %}</p>
             {% with participants=job.participations.all %}{% if participants %}<p>{% translate "Technician" %}: {% for participation in participants %}{{ participation.mechanic.get_full_name|default:participation.mechanic.username }}{% if not forloop.last %}, {% endif %}{% endfor %}</p>{% endif %}{% endwith %}
@@ -45,6 +54,18 @@
     <h3>{% translate "Parts requests" %}</h3>
     {% for item in parts_requests %}<p>{% if item.status == "delivered" %}✓ {% endif %}<strong>{{ item.part|default:item.custom_item }}</strong> · {{ item.get_status_display }} · {{ item.quantity_requested }} {{ item.unit }}{% if item.quantity_delivered %} / {{ item.quantity_delivered }} {{ item.unit_delivered|default:item.unit }}{% endif %}</p>{% empty %}<p>—</p>{% endfor %}
 </section>
+
+{% if warehouse_notes %}<section class="panel" style="margin-top:18px">
+    <h3>Comunicazioni del magazzino</h3>
+    {% for note in warehouse_notes %}
+    <article style="padding:10px 0;border-bottom:1px solid #d8e0e8">
+        <strong>{% if note.part %}{{ note.part }}{% elif note.parts_request_id %}{{ note.parts_request.custom_item|default:"Ricambio" }}{% else %}Ricambio{% endif %}</strong>
+        <p>{{ note.text|linebreaksbr }}</p>
+        {% if note.estimated_delivery_at %}<p>Consegna prevista: {{ note.estimated_delivery_at|date:"d/m/Y" }}</p>{% endif %}
+        <small>{{ note.author|default:_("Warehouse") }} · {{ note.created_at|date:"d/m/Y H:i" }}</small>
+    </article>
+    {% endfor %}
+</section>{% endif %}
 
 {% if warranty_claims or warranty_returns %}<section class="panel" style="margin-top:18px">
     <h3>{% translate "Warranties" %}</h3>

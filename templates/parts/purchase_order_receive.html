@@ -1,0 +1,28 @@
+{% extends "base.html" %}
+{% load i18n %}
+{% block title %}Entrata merce · {{ purchase_order.order_number }}{% endblock %}
+{% block content %}
+<div class="page-heading">
+    <div><h2>Registrazione entrata merce</h2><p>{{ purchase_order.order_number }} · {{ purchase_order.supplier }}</p></div>
+    <a class="button-link" href="{% url 'purchase_order_detail' pk=purchase_order.pk %}">Torna all'ordine</a>
+</div>
+<section class="panel">
+    <form method="post">
+        {% csrf_token %}
+        <div class="form-field"><label for="receipt_number">Numero bolla di entrata</label><input id="receipt_number" name="receipt_number" maxlength="40" required></div>
+        <div class="table-wrap" style="margin-top:16px"><table>
+            <thead><tr><th>Articolo</th><th>Ordinata</th><th>Ricevuta</th><th>Residua</th><th>Quantità in questa bolla</th></tr></thead>
+            <tbody>{% for line in purchase_order.lines.all %}
+            <tr>
+                <td>{{ line.part.part_number }} · {{ line.part.name }}</td>
+                <td>{{ line.quantity_ordered }} {{ line.part.unit }}</td>
+                <td>{{ line.quantity_received }} {{ line.part.unit }}</td>
+                <td>{{ line.quantity_remaining }} {{ line.part.unit }}</td>
+                <td><input type="number" name="received_{{ line.pk }}" min="0" step="0.01" value=""></td>
+            </tr>
+            {% endfor %}</tbody>
+        </table></div>
+        <button type="submit">Registra entrata</button>
+    </form>
+</section>
+{% endblock %}

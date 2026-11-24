@@ -5,7 +5,15 @@ from . import views
 
 urlpatterns = [
     path("", views.inventory, name="inventory"),
+    path("ordini-fornitore/", views.purchase_order_list, name="purchase_order_list"),
+    path("ordini-fornitore/<int:pk>/", views.purchase_order_detail, name="purchase_order_detail"),
+    path("ordini-fornitore/<int:pk>/pdf/", views.purchase_order_document, name="purchase_order_pdf"),
+    path("ordini-fornitore/<int:pk>/ricezione/", views.purchase_order_receive, name="purchase_order_receive"),
+    path("bolle-entrata/<int:pk>/pdf/", views.goods_receipt_document, name="goods_receipt_pdf"),
+    path("listini-fornitore/", views.supplier_price_list_list, name="supplier_price_list_list"),
+    path("listini-fornitore/importa/", views.supplier_price_list_import, name="supplier_price_list_import"),
     path("nuovo/", views.part_create, name="part_create"),
+    path("<int:pk>/prezzi/", views.part_price_lists, name="part_price_lists"),
     path("<int:pk>/", views.part_detail, name="part_detail"),
     path("<int:pk>/modifica/", views.part_edit, name="part_edit"),
     path("<int:pk>/movimenti/", views.part_movement, name="part_movement"),

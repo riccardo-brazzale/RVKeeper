@@ -3,14 +3,14 @@ from decimal import Decimal
 from django import forms
 from django.contrib.auth import get_user_model
 from django.db.models import Q
-from django.forms import BaseFormSet, formset_factory
+from django.forms import BaseFormSet, formset_factory, modelformset_factory
 from django.utils.translation import gettext_lazy as _
 
 from clientandsuppliers.models import CamperOwner
-from orders.models import WorkOrder
+from orders.models import Job, WorkOrder
 from .models import Camper, CamperPhoto
 from parts.forms import PartDocumentForm, PartSupplierOfferForm
-from parts.models import Part
+from parts.models import JobPartUsage, Part, PartsRequest
 
 
 class CustomerChoiceField(forms.ModelChoiceField):
@@ -170,7 +170,6 @@ class WorkOrderForm(forms.ModelForm):
             "model": _("Model"),
             "odometer": _("Odometer"),
             "work_classification": _("Work classification"),
-            "tariff_type": "Tariffa applicata",
             "warranty_status": _("Warranty status"),
             "reception_notes": _("Reception notes"),
             "checklist": _("Checklist"),
@@ -196,7 +195,6 @@ class WorkOrderForm(forms.ModelForm):
             help_text=_("The customer is automatically taken from the selected camper."),
             widget=CamperSelect(campers=campers),
         )
-        self.fields["tariff_type"].label = "Tariffa manodopera"
         for field_name in ("year", "make", "model", "odometer"):
             self.fields[field_name].widget.attrs["readonly"] = True
             self.fields[field_name].widget.attrs["data-camper-snapshot"] = field_name
@@ -370,3 +368,47 @@ PartsRequestFormSet = formset_factory(
     PartsRequestLineForm, formset=NonEmptyPartsRequestFormSet, extra=1, can_delete=True
 )
 PartsUsageFormSet = formset_factory(PartsUsageLineForm, extra=1, can_delete=True)
+
+
+class InvoicePartsRequestForm(forms.ModelForm):
+    invoice_unit_price_override = forms.DecimalField(
+        required=False, max_digits=12, decimal_places=2, min_value=Decimal("0"),
+    )
+
+    class Meta:
+        model = PartsRequest
+        fields = ("invoice_unit_price_override",)
+        labels = {"invoice_unit_price_override": _("Unit price")}
+
+
+class InvoiceLaborPriceForm(forms.ModelForm):
+    invoice_hourly_rate_override = forms.DecimalField(
+        required=False, max_digits=12, decimal_places=2, min_value=Decimal("0"),
+    )
+
+    class Meta:
+        model = Job
+        fields = ("invoice_hourly_rate_override",)
+        labels = {"invoice_hourly_rate_override": _("Hourly rate")}
+
+
+class InvoiceUsagePriceForm(forms.ModelForm):
+    invoice_unit_price_override = forms.DecimalField(
+        required=False, max_digits=12, decimal_places=2, min_value=Decimal("0"),
+    )
+
+    class Meta:
+        model = JobPartUsage
+        fields = ("invoice_unit_price_override",)
+        labels = {"invoice_unit_price_override": _("Unit price")}
+
+
+InvoicePartsRequestFormSet = modelformset_factory(
+    PartsRequest, form=InvoicePartsRequestForm, extra=0,
+)
+InvoiceLaborPriceFormSet = modelformset_factory(
+    Job, form=InvoiceLaborPriceForm, extra=0,
+)
+InvoiceUsagePriceFormSet = modelformset_factory(
+    JobPartUsage, form=InvoiceUsagePriceForm, extra=0,
+)

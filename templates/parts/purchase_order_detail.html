@@ -1,0 +1,54 @@
+{% extends "base.html" %}
+{% load i18n %}
+{% block title %}{{ purchase_order.order_number }} · Ordine fornitore{% endblock %}
+{% block content %}
+<div class="page-heading">
+    <div><h2>{{ purchase_order.order_number }}</h2><p>{{ purchase_order.supplier }} · {{ purchase_order.order_date|date:"d/m/Y" }} · {{ purchase_order.get_status_display }}</p></div>
+    <div class="actions">
+        <a class="button-link" href="{% url 'purchase_order_pdf' pk=purchase_order.pk %}" target="_blank" rel="noopener">PDF ordine</a>
+        {% if purchase_order.status == "open" or purchase_order.status == "partially_received" %}
+        <a class="button-link" href="{% url 'purchase_order_receive' pk=purchase_order.pk %}">Registra entrata merce</a>
+        {% endif %}
+    </div>
+</div>
+<section class="panel">
+    <h3>Righe ordine</h3>
+    {% if purchase_order.status == "open" or purchase_order.status == "partially_received" %}
+    <form method="post">
+        {% csrf_token %}<input type="hidden" name="action" value="prices">
+        <div class="table-wrap"><table>
+            <thead><tr><th>Codice fornitore</th><th>Codice interno</th><th>Articolo</th><th>Necessaria</th><th>Ordinata</th><th>Ricevuta</th><th>Prezzo</th><th>Sconto %</th></tr></thead>
+            <tbody>{% for line in purchase_order.lines.all %}
+            <tr>
+                <td>{{ line.supplier_article_code|default:"—" }}</td><td>{{ line.part.part_number }}</td><td>{{ line.part.name }}</td>
+                <td>{{ line.quantity_required }} {{ line.part.unit }}</td><td>{{ line.quantity_ordered }} {{ line.part.unit }}</td><td>{{ line.quantity_received }} {{ line.part.unit }}</td>
+                <td><input type="number" min="0" step="0.01" name="price_{{ line.pk }}" value="{{ line.unit_price }}" required></td>
+                <td><input type="number" min="0" max="100" step="0.01" name="discount_{{ line.pk }}" value="{{ line.discount_percent }}" required></td>
+            </tr>
+            {% endfor %}</tbody>
+        </table></div>
+        <button type="submit">Salva prezzi e sconti</button>
+    </form>
+    <form method="post" style="margin-top:16px">
+        {% csrf_token %}<input type="hidden" name="action" value="close">
+        <button class="button-pause" type="submit">Saldare ordine</button>
+        <small>L'ordine può essere saldato anche con quantità ancora da ricevere.</small>
+    </form>
+    {% else %}
+    <div class="table-wrap"><table>
+        <thead><tr><th>Codice fornitore</th><th>Codice interno</th><th>Articolo</th><th>Necessaria</th><th>Ordinata</th><th>Ricevuta</th><th>Prezzo</th><th>Sconto %</th></tr></thead>
+        <tbody>{% for line in purchase_order.lines.all %}
+        <tr><td>{{ line.supplier_article_code|default:"—" }}</td><td>{{ line.part.part_number }}</td><td>{{ line.part.name }}</td><td>{{ line.quantity_required }} {{ line.part.unit }}</td><td>{{ line.quantity_ordered }} {{ line.part.unit }}</td><td>{{ line.quantity_received }} {{ line.part.unit }}</td><td>{{ line.unit_price }}</td><td>{{ line.discount_percent }}</td></tr>
+        {% endfor %}</tbody>
+    </table></div>
+    {% endif %}
+</section>
+{% if purchase_order.goods_receipts.all %}
+<section class="panel" style="margin-top:18px">
+    <h3>Bolle di entrata merce</h3>
+    <ul>{% for receipt in purchase_order.goods_receipts.all %}
+        <li>{{ receipt.receipt_number }} · {{ receipt.received_at|date:"d/m/Y H:i" }} · <a href="{% url 'goods_receipt_pdf' pk=receipt.pk %}" target="_blank" rel="noopener">Stampa bolla</a></li>
+    {% endfor %}</ul>
+</section>
+{% endif %}
+{% endblock %}

@@ -1,0 +1,103 @@
+{% extends "base.html" %}
+{% load i18n %}
+{% block title %}{{ title }} · RVKeeper{% endblock %}
+{% block content %}
+<div class="page-heading">
+    <div>
+        <h2>{{ title }}</h2>
+        {% if discount_formset %}
+            <p>Imposta gli sconti percentuali del cliente. Vengono applicati al prezzo del listino non cliente valido alla data dell'OdL.</p>
+        {% else %}
+            <p>Ogni prezzo vale dalla data indicata fino alla data iniziale della versione successiva. Le date devono essere in ordine: precedente, corrente, futuro.</p>
+        {% endif %}
+    </div>
+    <a class="button-link" href="{% url 'price_lists' %}">Elenco listini</a>
+</div>
+{% if can_rotate %}
+<form method="post" action="{% url 'price_list_rotate' pk=price_list.pk %}" onsubmit="return confirm('La rotazione elimina i prezzi precedenti e sposta il futuro nel corrente. Continuare?')">
+    {% csrf_token %}
+    <button type="submit">Ruota prezzi del listino</button>
+</form>
+{% endif %}
+<section class="panel">
+    <form method="post">
+            {% csrf_token %}
+            {% if form.non_field_errors %}<div class="form-errors">{{ form.non_field_errors }}</div>{% endif %}
+            <div class="form-grid">
+                {% for field in form %}
+                    <div class="form-field">
+                        <label for="{{ field.id_for_label }}">{{ field.label }}</label>
+                        {{ field }}
+                        {% if field.help_text %}<small>{{ field.help_text }}</small>{% endif %}
+                        {% for error in field.errors %}<div class="form-errors">{{ error }}</div>{% endfor %}
+                    </div>
+                {% endfor %}
+            </div>
+
+            {% if discount_formset %}
+                <h3>Sconti cliente</h3>
+                {{ discount_formset.management_form }}
+                {% if discount_formset.non_form_errors %}<div class="form-errors">{{ discount_formset.non_form_errors }}</div>{% endif %}
+                {% for discount in discount_formset %}
+                    <fieldset class="panel" style="margin:14px 0;padding:18px">
+                        <legend>Regola {{ forloop.counter }}</legend>
+                        {% for hidden in discount.hidden_fields %}{{ hidden }}{% endfor %}
+                        <div class="form-grid">
+                            {% for field in discount.visible_fields %}
+                                <div class="form-field">
+                                    <label for="{{ field.id_for_label }}">{{ field.label }}</label>
+                                    {{ field }}
+                                    {% for error in field.errors %}<div class="form-errors">{{ error }}</div>{% endfor %}
+                                </div>
+                            {% endfor %}
+                        </div>
+                        {% for error in discount.non_field_errors %}<div class="form-errors">{{ error }}</div>{% endfor %}
+                    </fieldset>
+                {% endfor %}
+            {% else %}
+                <h3>Articoli e versioni prezzo</h3>
+                {{ item_formset.management_form }}
+                {% if item_formset.non_form_errors %}<div class="form-errors">{{ item_formset.non_form_errors }}</div>{% endif %}
+                {% for item in item_formset %}
+                    <fieldset class="panel" style="margin:14px 0;padding:18px">
+                        <legend>Voce {{ forloop.counter }}</legend>
+                        {% for hidden in item.hidden_fields %}{{ hidden }}{% endfor %}
+                        <div class="form-grid">
+                            {% for field in item.visible_fields %}
+                                <div class="form-field">
+                                    <label for="{{ field.id_for_label }}">{{ field.label }}</label>
+                                    {{ field }}
+                                    {% for error in field.errors %}<div class="form-errors">{{ error }}</div>{% endfor %}
+                                </div>
+                            {% endfor %}
+                        </div>
+                        {% for error in item.non_field_errors %}<div class="form-errors">{{ error }}</div>{% endfor %}
+                    </fieldset>
+                {% endfor %}
+            {% endif %}
+
+            {% if allow_labor_creation and not discount_formset %}
+                <h3>Nuovi codici manodopera</h3>
+                <p>Crea il codice manodopera e le relative versioni di prezzo. L’articolo sarà disponibile anche negli altri listini.</p>
+                {{ labor_formset.management_form }}
+                {% if labor_formset.non_form_errors %}<div class="form-errors">{{ labor_formset.non_form_errors }}</div>{% endif %}
+                {% for labor in labor_formset %}
+                    <fieldset class="panel" style="margin:14px 0;padding:18px">
+                        <legend>Nuovo codice {{ forloop.counter }}</legend>
+                        <div class="form-grid">
+                            {% for field in labor.visible_fields %}
+                                <div class="form-field">
+                                    <label for="{{ field.id_for_label }}">{{ field.label }}</label>
+                                    {{ field }}
+                                    {% for error in field.errors %}<div class="form-errors">{{ error }}</div>{% endfor %}
+                                </div>
+                            {% endfor %}
+                        </div>
+                    </fieldset>
+                {% endfor %}
+            {% endif %}
+            <button type="submit">Salva listino</button>
+            <a href="{% url 'price_lists' %}">{% translate "Cancel" %}</a>
+    </form>
+</section>
+{% endblock %}

@@ -1,17 +1,17 @@
 ---
-title: "fleet_documentcategory"
+title: "orders_documentcategory"
 tags:
   - rvkeeper
   - database-table
-  - fleet
+  - orders
 ---
 
-# `fleet_documentcategory`
+# `orders_documentcategory`
 
-**Modello Django:** `fleet.DocumentCategory`  
+**Modello Django:** `orders.DocumentCategory`  
 **Descrizione:** Categoria documento  
-**App:** `fleet`  
-**Codice:** [fleet/models.py](../../../fleet/models.py)
+**App:** `orders`  
+**Codice:** [orders/models.py](../../../fleet/models.py)
 
 ## Colonne
 
@@ -27,7 +27,7 @@ tags:
 ## Riferimenti in ingresso
 
 - [[DB - fleet_camperphoto]]. Campo `category_id` (attributo `category`).
-- [[DB - fleet_attachment]]. Campo `category_id` (attributo `category`).
+- [[DB - orders_attachment]]. Campo `category_id` (attributo `category`).
 - [[DB - clientandsuppliers_contactdocument]]. Campo `category_id` (attributo `category`).
 - [[DB - parts_partdocument]]. Campo `category_id` (attributo `category`).
 

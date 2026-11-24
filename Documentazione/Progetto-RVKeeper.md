@@ -16,7 +16,7 @@ created: 2026-11-11
 > [!abstract] Scopo
 > RVKeeper Ã¨ un'applicazione web per gestire il flusso operativo di un'officina che lavora su camper: anagrafiche, parco mezzi, preventivi, ordini di lavoro, attivitÃ  dei tecnici, ricambi, garanzie, resi, notifiche e report.
 
-Questa nota descrive il repository dopo la riprogettazione dello schema. Le migrazioni iniziali sono state rigenerate per le app di dominio: in un ambiente nuovo lo schema viene creato con `python manage.py migrate`. Non Ã¨ stata eseguita una conversione/migrazione dati da un vecchio database, coerentemente con il fatto che il progetto Ã¨ ancora pre-produzione.
+Questa nota descrive il repository dopo il riallineamento delle app di dominio. Le migrazioni spostano lo stato dei modelli e rinominano le tabelle esistenti senza ricreare i record; conservano anche gli identificativi dei content type e dei permessi.
 
 ## Indice
 
@@ -51,7 +51,7 @@ Questa nota descrive il repository dopo la riprogettazione dello schema. Le migr
 | Lingue dichiarate | inglese e italiano nel settings; lingua utente anche francese, tedesco e spagnolo |
 | Fuso orario Django | UTC, con `USE_TZ=True` |
 
-Il progetto Ã¨ organizzato in app Django per dominio. `fleet` contiene il parco mezzi e i flussi trasversali; `orders`, `parts`, `quotes` e `clientandsuppliers` possiedono modelli e tabelle separate per area funzionale.
+Il progetto e organizzato in app Django per dominio: `fleet` gestisce camper e foto; `orders` gestisce gli ordini e i flussi operativi; `parts` gestisce catalogo, richieste e magazzino.
 
 ## Avvio e configurazione
 
@@ -120,19 +120,20 @@ flowchart TD
 | `config` | Settings, URL root, WSGI/ASGI e ordinamento admin |
 | `accounts` | Utente personalizzato, manager, form e admin utenti |
 | `workshops` | Officine, ruoli e appartenenze utente-officina |
-| `fleet` | Camper e foto; viste principali dashboard, flussi, report, notifiche, audit ed export; modelli operativi storici |
+| `fleet` | Camper e fotografie del parco mezzi; entry point compatibili per le viste storiche |
 | `clientandsuppliers` | Anagrafica clienti/fornitori e relativi form, viste e URL |
-| `orders` | Ordini di lavoro e lavorazioni: viste e URL, modelli `WorkOrder` e `Job` |
+| `orders` | Ordini, lavorazioni, garanzie, resi, allegati, note, notifiche, assegnazioni, tempi e audit |
 | `quotes` | Preventivi, righe, stato, form e conversione in ordine |
-| `parts` | Articoli, offerte fornitore, documenti e movimenti di magazzino |
+| `parts` | Articoli, richieste ricambi, impegni, note magazzino, acquisti, ricezioni e movimenti |
 | `templates` | HTML per dashboard, moduli, liste, dettagli, autenticazione e admin |
 | `static` | Logo, sfondo e CSS admin |
 | `UserManual` | Manuale amministrativo in formato DOCX |
 
 ### Confini tra le app
 
-I modelli sono registrati nell'app in cui vivono: `orders`, `quotes`, `parts`, `clientandsuppliers` e `fleet`. Le migrazioni storiche sono state rimosse e rigenerate come migrazioni iniziali pulite. Non c'Ã¨ una migrazione dati automatica dal vecchio schema. `CamperOwner` ha il nome unico nel nuovo codice, senza alias `BusinessPartner`.
+`fleet` possiede camper e fotografie. `orders` possiede ordini e lavorazioni, oltre ai modelli operativi collegati; `parts` possiede catalogo, richieste ricambi e processi di magazzino/acquisto. Le migrazioni `SeparateDatabaseAndState` rinominano le tabelle esistenti e aggiornano lo stato Django in modo reversibile, mantenendo dati, relazioni, content type e permessi. `fleet.models` conserva alias di compatibilita per gli import storici dei modelli trasferiti.
 
+`CamperOwner` e il nome unico nel nuovo codice, senza alias `BusinessPartner`.
 ## Funzionamento applicativo
 
 ### Flusso principale del lavoro
@@ -155,7 +156,7 @@ flowchart LR
 
 ### Interfaccia smartphone e desktop
 
-Il menu autenticato mostra **Dashboard** come prima voce, separata dai gruppi e evidenziata in rosso. Su desktop la sidebar occupa 340 pixel; su mobile resta un pannello a scomparsa largo al massimo 360 pixel o il 92% della viewport. I gruppi sono **Anagrafiche** (clienti/fornitori, parco mezzi, articoli di manodopera e catalogo ricambi), **Ordini** (voce **Ordini** per la lista OdL, seguita dai preventivi), **Ordini di lavorazione** (sessioni e lavorazioni, richieste ricambi, note, assegnazioni e allegati), **Garanzie**, **Reports** e **Utility**. La voce relativa alla pagina corrente apre il gruppo corrispondente.
+Il menu autenticato mostra **Dashboard** come prima voce, separata dai gruppi e evidenziata in rosso. Su desktop la sidebar occupa 340 pixel; su mobile resta un pannello a scomparsa largo al massimo 360 pixel o il 92% della viewport. **Anagrafiche** comprende clienti/fornitori, parco mezzi e catalogo ricambi; i codici manodopera si gestiscono nel listino CLIENTE. Gli altri gruppi sono **Ordini**, **Ordini di lavorazione**, **Garanzie**, **Reports** e **Utility**. La voce relativa alla pagina corrente apre il gruppo corrispondente.
 
 L'interfaccia si adatta alla larghezza della viewport, senza richiedere un'app installata. La soglia corrente e 760 pixel: smartphone e finestre strette mantengono il layout mobile esistente, con menu laterale a scomparsa e contenuti impilati. La navigazione asincrona e attiva solo oltre tale soglia.
 
@@ -199,7 +200,7 @@ Le richieste ricambi possono essere inviate direttamente da **Le mie lavorazioni
 
 Alla fine della sessione il meccanico registra separatamente i ricambi aggiuntivi prelevati dalla giacenza, confermando anche l'eventuale elenco vuoto. La conferma verifica la disponibilità e, nella stessa transazione, registra `JobPartUsage`, scarica l'inventario e crea un `PartMovement`. Se la giacenza non basta, la sessione resta attiva e non vengono applicati scarichi parziali. Non vanno reinseriti nel consumo i ricambi già registrati come consegnati. Il PDF dell'OdL riepiloga entrambi i tipi di ricambio utilizzato.
 
-Ogni ricambio ha codice univoco per officina, descrizione, unitÃ , costo, prezzo vendita, tempo standard, quantitÃ , soglia minima e ubicazione. Le offerte collegano un ricambio a un fornitore e memorizzano codice fornitore, prezzo acquisto, sconto, quantitÃ  minima, tempi di consegna e preferenza. Un'offerta marcata preferita aggiorna il costo del ricambio al prezzo netto.
+Ogni ricambio ha codice univoco per officina, descrizione, unita, costo, tempo standard, quantita, soglia minima e ubicazione. Prezzi di vendita e codici manodopera sono gestiti nei listini, non nelle anagrafiche. I listini CLIENTE e OFFICINE sono indipendenti e ciascuno mantiene per articolo prezzo precedente, corrente e futuro con le rispettive date di validita; i listini cliente sono usati solo per gli sconti percentuali. La risoluzione seleziona il prezzo valido alla data dell'OdL e applica lo sconto del cliente. Il prospetto di fatturazione permette override per singola riga di ricambio e manodopera. Le offerte collegano un ricambio a un fornitore e memorizzano codice fornitore, prezzo acquisto, sconto, quantita minima, tempi di consegna e preferenza. Un'offerta marcata preferita aggiorna il costo del ricambio al prezzo netto.
 
 `PartMovement` conserva carichi, scarichi e rettifiche, facoltativamente collegati a un OdL. La vista esegue la variazione della giacenza dentro una transazione con lock della riga articolo, impedisce quantitÃ  negative e salva il movimento e una voce audit. La rettifica esprime la quantitÃ  finale desiderata; il movimento memorizza la differenza.
 
@@ -248,23 +249,29 @@ Legenda: `1:N` indica uno-a-molti; `N:M` molti-a-molti; `1:1` uno-a-uno. I nomi 
 | `Job` | `orders_job` | Lavorazione dell'ordine, stato e tempi standard |
 | `JobCall` | `orders_jobcall` | Chiamata personale a un meccanico, accettazione e storico |
 | `PauseReason` | `orders_pausereason` | Causali pausa configurabili in admin |
+| `LaborArticle` | `orders_laborarticle` | Codice e descrizione manodopera, gestiti attraverso le righe dei listini |
+| `PriceList` | `orders_pricelist` | Listino CLIENTE, OFFICINE o sconti cliente, per officina |
+| `PriceListItem` | `orders_pricelistitem` | Articolo del listino e prezzi precedente/corrente/futuro con validita |
 | `Quote` | `quotes_quote` | Preventivo cliente e collegamento eventuale all'OdL generato |
 | `QuoteLine` | `quotes_quoteline` | Riga preventivo, quantitÃ , prezzo, sconto e tempo |
 | `Part` | `parts_part` | Catalogo ricambi e giacenza corrente |
 | `PartSupplierOffer` | `parts_partsupplieroffer` | Prezzo e condizioni di un fornitore per un ricambio |
 | `PartDocument` | `parts_partdocument` | Allegato classificato, ripetibile per ogni ricambio |
 | `PartMovement` | `parts_partmovement` | Registro carico/scarico/rettifica |
-| `PartsRequest` | `fleet_partsrequest` | Richiesta di approvvigionamento collegata a OdL/Job |
-| `WarrantyClaim` | `fleet_warrantyclaim` | Richiesta di autorizzazione garanzia |
-| `WarrantyReturn` | `fleet_warrantyreturn` | Pratica di reso/sostituzione/accredito |
-| `JobNote` | `fleet_jobnote` | Note e traduzioni per lavorazione |
-| `Attachment` | `fleet_attachment` | File classificato allegato a OdL/Job |
-| `Notification` | `fleet_notification` | Avviso per utente o officina |
-| `TimeEvent` | `fleet_timeevent` | Eventi di rilevazione tempo del Job |
-| `JobAssignment` | `fleet_jobassignment` | Storico trasferimento assegnazione Job |
-| `JobParticipation` | `fleet_jobparticipation` | Sessione personale di ciascun meccanico su una lavorazione |
-| `DocumentCategory` | `fleet_documentcategory` | Catalogo admin per classificare allegati e foto |
-| `AuditLog` | `fleet_auditlog` | Registro attivitÃ  applicativa |
+| `PartsRequest` | `parts_partsrequest` | Richiesta di approvvigionamento collegata a OdL/Job |
+| `JobPartUsage` | `parts_jobpartusage` | Ricambi utilizzati durante una lavorazione |
+| `WarehouseNote` | `parts_warehousenote` | Nota del magazzino su disponibilita e consegna |
+| `WarehouseNoteRead` | `parts_warehousenoteread` | Stato di lettura della nota per destinatario |
+| `WarrantyClaim` | `orders_warrantyclaim` | Richiesta di autorizzazione garanzia |
+| `WarrantyReturn` | `orders_warrantyreturn` | Pratica di reso/sostituzione/accredito |
+| `JobNote` | `orders_jobnote` | Note e traduzioni per lavorazione |
+| `Attachment` | `orders_attachment` | File classificato allegato a OdL/Job |
+| `Notification` | `orders_notification` | Avviso per utente o officina |
+| `TimeEvent` | `orders_timeevent` | Eventi di rilevazione tempo del Job |
+| `JobAssignment` | `orders_jobassignment` | Storico trasferimento assegnazione Job |
+| `JobParticipation` | `orders_jobparticipation` | Sessione personale di ciascun meccanico su una lavorazione |
+| `DocumentCategory` | `orders_documentcategory` | Catalogo admin per classificare allegati e foto |
+| `AuditLog` | `orders_auditlog` | Registro attivitÃ  applicativa |
 
 I nomi tabellari sono la convenzione `app_label_modelname`. Gli utenti Django usano `accounts_user`; officine/ruoli/appartenenze usano il prefisso `workshops_`. Le migrazioni nuove non usano piÃ¹ l'etichetta storica `fleet` per clienti, ordini, articoli o preventivi.
 
@@ -373,7 +380,7 @@ L'app prevede `Workshop`, `Role` e `Membership`, con permessi Django associabili
 
 La cartella `static/` contiene risorse grafiche dell'interfaccia (logo, sfondo, CSS): non Ã¨ l'archivio dei camper e non va navigata per targa. Foto e documenti utente sono in `MEDIA_ROOT` e vengono organizzati in directory per targa/codice/contatto e categoria; si consultano dalle rispettive schede nell'app. In modalitÃ  `DEBUG`, `config/urls.py` serve i media con `static()`. In produzione serve configurare uno storage e un accesso ai file adeguati, senza esporre indiscriminatamente documenti personali.
 
-Le categorie sono righe della tabella `fleet_documentcategory`, modificabili dall'admin e selezionabili in fase di caricamento di foto camper, documenti articoli, documenti cliente/fornitore e allegati OdL/Job. Il seed iniziale propone: foto esterni/interni, motore, accessori, libretto, manuale/scheda tecnica, manutenzione, garanzia, acquisto/fattura e altro. La stessa categoria puÃ² essere usata per molti allegati; articoli importanti possono quindi avere molte foto, manuali e schede.
+Le categorie sono righe della tabella `orders_documentcategory`, modificabili dall'admin e selezionabili in fase di caricamento di foto camper, documenti articoli, documenti cliente/fornitore e allegati OdL/Job. Il seed iniziale propone: foto esterni/interni, motore, accessori, libretto, manuale/scheda tecnica, manutenzione, garanzia, acquisto/fattura e altro. La stessa categoria puÃ² essere usata per molti allegati; articoli importanti possono quindi avere molte foto, manuali e schede.
 
 `PauseReason` (tabella `orders_pausereason`) Ã¨ gestita analogamente dall'admin. Le causali iniziali includono caffÃ¨, bagno, sigaretta, pranzo e altra pausa. Ogni evento registra meccanico, lavorazione, istante e causale; i report ricostruiscono i minuti dai segmenti start/ripresa-pausa/fine per ciascun meccanico.
 
@@ -388,7 +395,7 @@ Le categorie sono righe della tabella `fleet_documentcategory`, modificabili dal
 7. **Notifiche stock:** verificare la deduplicazione nel tempo e il comportamento al rientro sopra soglia; la creazione avviene mentre viene caricata la vista inventario.
 8. **Test automatici:** i file `accounts/tests.py`, `fleet/tests.py` e `workshops/tests.py` contengono attualmente solo placeholder; aggiungere copertura per tenant, permessi, conversioni, transizioni e movimenti prima di cambiamenti rilevanti.
 9. **Documentazione operativa:** nel repository Ã¨ presente `UserManual/Manuale_amministrazione_RVKeeper.docx`; confrontarlo con il comportamento corrente dopo modifiche funzionali.
-10. **Migrazioni:** le migrazioni iniziali sono la definizione versionata dello schema e vanno mantenute nel repository. Un database storico non va aggiornato alla cieca dopo la rigenerazione delle initial; lo script controlla le migrazioni pending e le colonne e si ferma in caso di divergenza.
+10. **Migrazioni:** mantenere versionate le migrazioni gia applicate. Il trasferimento dei modelli tra app rinomina le tabelle con operazioni reversibili; prima di applicarlo a un database esistente verificare il piano e predisporre un backup. Non rigenerare le migrazioni iniziali.
 
 Questi sono punti di verifica ricavati dalla struttura osservata, non necessariamente difetti riprodotti in esercizio.
 
